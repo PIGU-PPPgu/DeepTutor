@@ -10,4 +10,6 @@ BUILTIN_CAPABILITY_CLASSES: dict[str, str] = {
     "content_analyzer": "deeptutor.capabilities.content_analyzer:ContentAnalyzerCapability",
     "socratic_dialog": "deeptutor.capabilities.socratic_dialog:SocraticDialogCapability",
     "learning_guide": "deeptutor.capabilities.learning_guide:LearningGuideCapability",
+    "flashcard": "deeptutor.capabilities.flashcard:FlashcardCapability",
+    "parent_report": "deeptutor.capabilities.parent_report:ParentReportCapability",
 }
