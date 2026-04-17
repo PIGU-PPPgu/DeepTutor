@@ -60,12 +60,23 @@ ENHANCE_PROMPT = """你是一位播客制作专家。请优化以下双人对话
 {script}"""
 
 # ── TTS 配置 ────────────────────────────────────────────────────────────
+# 主力：Edge TTS（免费、稳定、中文质量高）
+# 备用：硅基流动（API不稳定，仅作 fallback）
+#
+# 依赖：pip install edge-tts
 
-TTS_API_URL = "https://api.siliconflow.cn/v1/audio/speech"
-TTS_MODEL = "siliconflow-tts-001"
-# 男声（老师）和女声（学生）
-VOICE_TEACHER = "alex"    # 男声
-VOICE_STUDENT = "beth"    # 女声
+# Edge TTS voices
+EDGE_VOICE_TEACHER = "zh-CN-YunxiNeural"   # 男声，成熟稳重
+EDGE_VOICE_STUDENT = "zh-CN-XiaoxiaoNeural"  # 女声，活泼清亮
+
+# 硅基流动 fallback 配置
+FALLBACK_TTS_API_URL = "https://api.siliconflow.cn/v1/audio/speech"
+FALLBACK_TTS_MODEL = "siliconflow-tts-001"
+FALLBACK_VOICE_TEACHER = "alex"
+FALLBACK_VOICE_STUDENT = "beth"
+
+# 是否优先使用 Edge TTS
+USE_EDGE_TTS = True
 
 
 # ── Capability 实现 ─────────────────────────────────────────────────────
@@ -182,28 +193,76 @@ class AudioCompanionCapability(BaseCapability):
     async def _tts_generate(
         self, script: str, api_key: str
     ) -> list[dict[str, Any]]:
-        """按角色分段生成 TTS 音频。"""
-        segments: list[dict[str, Any]] = []
+        """按角色分段生成 TTS 音频。优先 Edge TTS，失败则 fallback 到硅基流动。"""
         lines = self._parse_dialogue(script)
         if not lines:
-            return segments
+            return []
+
+        if USE_EDGE_TTS:
+            result = await self._edge_tts_generate(lines)
+            if result:
+                return result
+            logger.warning("Edge TTS failed, falling back to SiliconFlow")
+
+        return await self._siliconflow_tts_generate(lines, api_key)
+
+    async def _edge_tts_generate(
+        self, lines: list[tuple[str, str]]
+    ) -> list[dict[str, Any]]:
+        """使用 Edge TTS 生成音频（免费、稳定）。"""
+        try:
+            import edge_tts
+        except ImportError:
+            logger.warning("edge-tts not installed, run: pip install edge-tts")
+            return []
+
+        segments: list[dict[str, Any]] = []
+        import io
+
+        for role, text in lines:
+            voice = EDGE_VOICE_TEACHER if "老师" in role else EDGE_VOICE_STUDENT
+            clean_text = re.sub(r'\[停顿\d+秒\]', '', text).strip()
+            if not clean_text:
+                continue
+            try:
+                communicate = edge_tts.Communicate(clean_text, voice)
+                buffer = io.BytesIO()
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        buffer.write(chunk["data"])
+                audio_bytes = buffer.getvalue()
+                if audio_bytes:
+                    segments.append({
+                        "role": role,
+                        "text": clean_text,
+                        "audio_size": len(audio_bytes),
+                    })
+            except Exception as e:
+                logger.warning("Edge TTS error for %s: %s", role, e)
+
+        return segments
+
+    async def _siliconflow_tts_generate(
+        self, lines: list[tuple[str, str]], api_key: str
+    ) -> list[dict[str, Any]]:
+        """使用硅基流动 TTS 生成音频（备用方案）。"""
+        segments: list[dict[str, Any]] = []
 
         async with httpx.AsyncClient(timeout=30) as client:
             for role, text in lines:
-                voice = VOICE_TEACHER if "老师" in role else VOICE_STUDENT
-                # 去掉停顿标记
+                voice = FALLBACK_VOICE_TEACHER if "老师" in role else FALLBACK_VOICE_STUDENT
                 clean_text = re.sub(r'\[停顿\d+秒\]', '', text).strip()
                 if not clean_text:
                     continue
                 try:
                     resp = await client.post(
-                        TTS_API_URL,
+                        FALLBACK_TTS_API_URL,
                         headers={
                             "Authorization": f"Bearer {api_key}",
                             "Content-Type": "application/json",
                         },
                         json={
-                            "model": TTS_MODEL,
+                            "model": FALLBACK_TTS_MODEL,
                             "input": clean_text,
                             "voice": voice,
                         },
@@ -216,11 +275,11 @@ class AudioCompanionCapability(BaseCapability):
                         })
                     else:
                         logger.warning(
-                            "TTS failed for %s: %d %s",
+                            "SiliconFlow TTS failed for %s: %d %s",
                             role, resp.status_code, resp.text[:200],
                         )
                 except Exception as e:
-                    logger.warning("TTS error: %s", e)
+                    logger.warning("SiliconFlow TTS error: %s", e)
 
         return segments
 
