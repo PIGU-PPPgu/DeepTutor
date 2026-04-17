@@ -12,4 +12,6 @@ BUILTIN_CAPABILITY_CLASSES: dict[str, str] = {
     "learning_guide": "deeptutor.capabilities.learning_guide:LearningGuideCapability",
     "flashcard": "deeptutor.capabilities.flashcard:FlashcardCapability",
     "parent_report": "deeptutor.capabilities.parent_report:ParentReportCapability",
+    "audio_companion": "deeptutor.capabilities.audio_companion:AudioCompanionCapability",
+    "assessment": "deeptutor.capabilities.assessment:AssessmentCapability",
 }
