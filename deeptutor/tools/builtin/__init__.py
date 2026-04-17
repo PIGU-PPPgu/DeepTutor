@@ -386,6 +386,77 @@ class PaperSearchToolWrapper(_PromptHintsMixin, BaseTool):
         )
 
 
+class ContentAnalyzerTool(_PromptHintsMixin, BaseTool):
+    """Content analysis tool for function-calling in chat mode."""
+
+    def get_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="content_analyzer",
+            description=(
+                "Analyze textbook/book content: auto-detect type (literary/math/english/science/social), "
+                "extract knowledge points, mark exam focus areas, and generate knowledge graphs."
+            ),
+            parameters=[
+                ToolParameter(
+                    name="content",
+                    type="string",
+                    description="The textbook/book content text to analyze.",
+                ),
+                ToolParameter(
+                    name="content_type",
+                    type="string",
+                    description="Force content type: literary, math, english, science, social, custom. Leave empty for auto-detect.",
+                    required=False,
+                    default="",
+                    enum=["literary", "math", "english", "science", "social", "custom", ""],
+                ),
+            ],
+        )
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        from deeptutor.capabilities.content_analyzer import ContentAnalyzerCapability
+        from deeptutor.services.llm.config import get_llm_config
+
+        content = kwargs.get("content", "")
+        forced_type = kwargs.get("content_type", "")
+
+        if not content or len(content.strip()) < 10:
+            return ToolResult(
+                content="Content too short for analysis. Provide at least 10 characters.",
+                success=False,
+            )
+
+        cap = ContentAnalyzerCapability()
+        llm_config = get_llm_config()
+
+        if forced_type:
+            content_type = forced_type
+        else:
+            detection = await cap._detect_type(
+                content, llm_config.api_key, llm_config.base_url, llm_config.model
+            )
+            content_type = detection.get("type", "custom")
+
+        analysis = await cap._analyze_content(
+            content, content_type,
+            llm_config.api_key, llm_config.base_url, llm_config.model,
+        )
+
+        structured = cap._build_structure(analysis, content_type)
+        formatted = cap._format_output(structured, content_type)
+
+        return ToolResult(
+            content=formatted,
+            success=True,
+            metadata={
+                "content_type": content_type,
+                "type_label": cap._type_label(content_type),
+                "analysis": analysis,
+                "knowledge_graph": structured.get("knowledge_graph", []),
+            },
+        )
+
+
 class GeoGebraAnalysisTool(_PromptHintsMixin, BaseTool):
     """Analyze a math-problem image and generate GeoGebra visualization commands."""
 
@@ -505,6 +576,7 @@ BUILTIN_TOOL_TYPES: tuple[type[BaseTool], ...] = (
     CodeExecutionTool,
     ReasonTool,
     PaperSearchToolWrapper,
+    ContentAnalyzerTool,
     GeoGebraAnalysisTool,
 )
 
@@ -524,6 +596,7 @@ __all__ = [
     "TOOL_ALIASES",
     "BrainstormTool",
     "CodeExecutionTool",
+    "ContentAnalyzerTool",
     "GeoGebraAnalysisTool",
     "PaperSearchToolWrapper",
     "RAGTool",

@@ -26,6 +26,7 @@ import { useTranslation } from "react-i18next";
 import { writeStoredLanguage } from "@/context/AppShellContext";
 import { apiUrl } from "@/lib/api";
 import { setTheme as applyThemePreference } from "@/lib/theme";
+import GitSyncButton from "./GitSyncButton";
 
 type ServiceName = "llm" | "embedding" | "search";
 
@@ -1263,6 +1264,9 @@ function SettingsPageContent() {
           onSkip={() => setTourGuideStep(-1)}
         />
       )}
+
+      {/* ── Git Sync ── */}
+      <GitSyncButton />
 
       {/* ── Test results modal (tour) ── */}
       {isTourMode && tourTestPhase !== "idle" && (
