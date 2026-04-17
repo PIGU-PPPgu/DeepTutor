@@ -225,15 +225,13 @@ class SocraticDialogCapability(BaseCapability):
 
     async def _llm_text(self, prompt: str) -> str:
         config = get_llm_config()
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
+        full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         resp = await complete(
-            messages=messages,
+            prompt=full_prompt,
             api_key=config.api_key,
             base_url=config.base_url,
             model=config.model,
+            temperature=0.7,
         )
         return resp.strip() if resp else ""
 

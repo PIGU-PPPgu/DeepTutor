@@ -96,12 +96,23 @@ async def _llm_call(messages: list[dict]) -> str:
     from deeptutor.services.llm.config import get_llm_config
 
     config = get_llm_config()
+    # Merge system prompt + user messages into a single prompt string
+    combined = ""
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "system":
+            combined += f"{content}\n\n"
+        else:
+            combined += f"{content}\n"
     response = await complete(
-        messages=messages,
+        prompt=combined.strip(),
+        system_prompt=messages[0].get("content", "") if messages and messages[0].get("role") == "system" else "You are a helpful assistant.",
         model=config.model,
         api_key=config.api_key,
         base_url=config.base_url,
         api_version=config.api_version,
+        temperature=0.7,
     )
     return response
 
