@@ -8,4 +8,5 @@ BUILTIN_CAPABILITY_CLASSES: dict[str, str] = {
     "math_animator": "deeptutor.capabilities.math_animator:MathAnimatorCapability",
     "visualize": "deeptutor.capabilities.visualize:VisualizeCapability",
     "content_analyzer": "deeptutor.capabilities.content_analyzer:ContentAnalyzerCapability",
+    "socratic_dialog": "deeptutor.capabilities.socratic_dialog:SocraticDialogCapability",
 }
