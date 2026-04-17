@@ -14,4 +14,6 @@ BUILTIN_CAPABILITY_CLASSES: dict[str, str] = {
     "parent_report": "deeptutor.capabilities.parent_report:ParentReportCapability",
     "audio_companion": "deeptutor.capabilities.audio_companion:AudioCompanionCapability",
     "assessment": "deeptutor.capabilities.assessment:AssessmentCapability",
+    "content_manager": "deeptutor.capabilities.content_manager:ContentManagerCapability",
+    "mindmap": "deeptutor.capabilities.mindmap:MindmapCapability",
 }
