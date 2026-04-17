@@ -17,4 +17,5 @@ BUILTIN_CAPABILITY_CLASSES: dict[str, str] = {
     "content_manager": "deeptutor.capabilities.content_manager:ContentManagerCapability",
     "mindmap": "deeptutor.capabilities.mindmap:MindmapCapability",
     "memory_chat": "deeptutor.capabilities.memory_enhanced_chat:MemoryEnhancedChatCapability",
+    "knowledge_graph": "deeptutor.capabilities.knowledge_graph:KnowledgeGraphCapability",
 }

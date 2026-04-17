@@ -457,6 +457,59 @@ class ContentAnalyzerTool(_PromptHintsMixin, BaseTool):
         )
 
 
+class KnowledgeGraphTool(_PromptHintsMixin, BaseTool):
+    """Knowledge graph tool for function-calling in chat mode."""
+
+    def get_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="knowledge_graph",
+            description=(
+                "Build and query a knowledge graph from educational content. "
+                "Actions: 'extract' (extract triples from text), "
+                "'query' (find relations/path/prerequisites for a concept), "
+                "'visualize' (render graph as Mermaid or outline)."
+            ),
+            parameters=[
+                ToolParameter(
+                    name="action",
+                    type="string",
+                    description="Action: extract, query, visualize",
+                    enum=["extract", "query", "visualize"],
+                ),
+                ToolParameter(
+                    name="content",
+                    type="string",
+                    description="Content text to extract knowledge from (for 'extract' action).",
+                    required=False,
+                ),
+                ToolParameter(
+                    name="concept",
+                    type="string",
+                    description="Concept label to query (for 'query' action).",
+                    required=False,
+                ),
+                ToolParameter(
+                    name="target_concept",
+                    type="string",
+                    description="Second concept for path finding (optional).",
+                    required=False,
+                ),
+                ToolParameter(
+                    name="graph_json",
+                    type="string",
+                    description="Serialized graph JSON to query/visualize (from previous extract).",
+                    required=False,
+                ),
+            ],
+        )
+
+    async def execute(self, **kwargs: Any) -> ToolResult:
+        from deeptutor.tools.knowledge_graph_tool import KnowledgeGraphTool as _KGT
+        # Delegate to the standalone tool implementation
+        tool = _KGT()
+        return await tool.execute(**kwargs)
+
+
 class GeoGebraAnalysisTool(_PromptHintsMixin, BaseTool):
     """Analyze a math-problem image and generate GeoGebra visualization commands."""
 
@@ -578,6 +631,7 @@ BUILTIN_TOOL_TYPES: tuple[type[BaseTool], ...] = (
     PaperSearchToolWrapper,
     ContentAnalyzerTool,
     GeoGebraAnalysisTool,
+    KnowledgeGraphTool,
 )
 
 BUILTIN_TOOL_NAMES: tuple[str, ...] = tuple(tool_type().name for tool_type in BUILTIN_TOOL_TYPES)
@@ -598,6 +652,7 @@ __all__ = [
     "CodeExecutionTool",
     "ContentAnalyzerTool",
     "GeoGebraAnalysisTool",
+    "KnowledgeGraphTool",
     "PaperSearchToolWrapper",
     "RAGTool",
     "ReasonTool",
