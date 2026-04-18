@@ -95,7 +95,7 @@ class ParentReportCapability(BaseCapability):
             if not learning_data:
                 learning_data = _mock_learning_data()
 
-            await stream.emit(
+            await stream.thinking(
                 "data_collected",
                 {"source": "real" if context.metadata.get("learning_data") else "mock"},
                 source=self.manifest.name,
@@ -113,7 +113,7 @@ class ParentReportCapability(BaseCapability):
             )
             analysis = _parse_json(analysis_raw)
 
-            await stream.emit("analysis", analysis, source=self.manifest.name)
+            await stream.thinking("analysis", source=self.manifest.name)
 
         # Stage 3: generate report
         async with stream.stage("generate", source=self.manifest.name):
@@ -126,7 +126,7 @@ class ParentReportCapability(BaseCapability):
                 temperature=0.7,
             )
 
-            await stream.emit("report", {"markdown": report_md}, source=self.manifest.name)
+            await stream.thinking("report", source=self.manifest.name)
 
         # Stage 4: suggest
         async with stream.stage("suggest", source=self.manifest.name):
@@ -145,4 +145,4 @@ class ParentReportCapability(BaseCapability):
                 "analysis": analysis,
                 "suggestions": suggestions,
             }
-            await stream.emit("result", result, source=self.manifest.name)
+            await stream.thinking("result", source=self.manifest.name)

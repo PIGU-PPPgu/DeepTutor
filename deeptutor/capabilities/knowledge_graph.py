@@ -291,17 +291,17 @@ class KnowledgeGraphCapability(BaseCapability):
     )
 
     async def run(self, context: UnifiedContext, stream: StreamBus) -> None:
-        content = context.user_input or ""
+        content = context.user_message or ""
         if not content.strip():
             async with stream.stage("respond", source=self.manifest.name):
-                stream.emit("请提供内容以构建知识图谱。")
+                await stream.thinking("请提供内容以构建知识图谱。", source=self.manifest.name)
             return
 
         graph = KnowledgeGraph()
 
         async with stream.stage("extract", source=self.manifest.name):
             triples = await self._extract_triples(content)
-            stream.emit(f"提取到 {len(triples)} 个三元组")
+            await stream.thinking(f"提取到 {len(triples)} 个三元组", source=self.manifest.name)
 
         async with stream.stage("build", source=self.manifest.name):
             for t in triples:
@@ -313,12 +313,12 @@ class KnowledgeGraphCapability(BaseCapability):
                     obj_desc=t.get("object_description", ""),
                     difficulty=t.get("difficulty", 0),
                 )
-            stream.emit(f"构建图谱：{len(graph.nodes)} 个节点，{len(graph.edges)} 条边")
+            await stream.thinking(f"构建图谱：{len(graph.nodes)} 个节点，{len(graph.edges)} 条边", source=self.manifest.name)
 
         async with stream.stage("visualize", source=self.manifest.name):
             mermaid = graph.to_mermaid()
             outline = graph.to_markdown_outline()
-            stream.emit(f"## 知识图谱大纲\n\n{outline}\n\n## Mermaid 图\n\n{mermaid}")
+            await stream.result(f"## 知识图谱大纲\n\n{outline}\n\n## Mermaid 图\n\n{mermaid}", source=self.manifest.name)
 
     async def _extract_triples(self, content: str) -> list[dict[str, Any]]:
         from deeptutor.services.llm import complete

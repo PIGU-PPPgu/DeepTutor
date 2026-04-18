@@ -113,7 +113,7 @@ class MemoryEnhancedChatCapability(BaseCapability):
                 base_url=config.base_url,
                 temperature=0.3,
             )
-            stream.emit_text(f"[记忆回顾] {recap}", source="recall")
+            await stream.thinking(f"[记忆回顾] {recap}", source="recall")
         except Exception:
             logger.debug("recall summarization failed, using raw memory", exc_info=True)
         return memory
@@ -145,7 +145,7 @@ class MemoryEnhancedChatCapability(BaseCapability):
             base_url=config.base_url,
             temperature=0.7,
         )
-        stream.emit_text(reply, source="chat")
+        await stream.thinking(reply, source="chat")
         return reply
 
     # ── learn ───────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ class MemoryEnhancedChatCapability(BaseCapability):
                     "timestamp": int(time.time()),
                 })
 
-            stream.emit_text(
+            await stream.thinking(
                 f"[学习分析] 掌握: {data.get('mastered', [])} | 困难: {data.get('struggling', [])} | 话题: {data.get('active_topic')}",
                 source="learn",
             )

@@ -80,6 +80,7 @@ class RAGTool(_PromptHintsMixin, BaseTool):
         query = kwargs.get("query", "")
         kb_name = kwargs.get("kb_name")
         event_sink = kwargs.get("event_sink")
+        mode = kwargs.get("mode")
         extra_kwargs = {
             key: value
             for key, value in kwargs.items()
@@ -89,6 +90,7 @@ class RAGTool(_PromptHintsMixin, BaseTool):
         result = await rag_search(
             query=query,
             kb_name=kb_name,
+            mode=mode,
             event_sink=event_sink,
             **extra_kwargs,
         )
@@ -637,8 +639,8 @@ BUILTIN_TOOL_TYPES: tuple[type[BaseTool], ...] = (
 BUILTIN_TOOL_NAMES: tuple[str, ...] = tuple(tool_type().name for tool_type in BUILTIN_TOOL_TYPES)
 
 TOOL_ALIASES: dict[str, tuple[str, dict[str, Any]]] = {
-    "rag_hybrid": ("rag", {}),
-    "rag_naive": ("rag", {}),
+    "rag_hybrid": ("rag", {"mode": "hybrid"}),
+    "rag_naive": ("rag", {"mode": "naive"}),
     "rag_search": ("rag", {}),
     "code_execute": ("code_execution", {}),
     "run_code": ("code_execution", {}),

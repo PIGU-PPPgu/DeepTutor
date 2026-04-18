@@ -124,6 +124,29 @@ def _is_retriable_error(error: BaseException) -> bool:
     return True
 
 
+def litellm_available() -> bool:
+    """Check if litellm is available."""
+    try:
+        import litellm  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+async def litellm_complete(**kwargs):
+    """Stub: delegates to litellm library."""
+    import litellm
+    return await litellm.acompletion(**kwargs)
+
+
+async def litellm_stream(**kwargs):
+    """Stub: delegates to litellm library."""
+    import litellm
+    response = await litellm.acompletion(stream=True, **kwargs)
+    async for chunk in response:
+        yield chunk
+
+
 def _should_use_local(base_url: str | None) -> bool:
     """
     Determine if we should use the local provider based on URL.

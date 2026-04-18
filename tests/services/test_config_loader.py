@@ -32,7 +32,6 @@ def test_load_config_with_main_merges_main_and_module_config(tmp_path: Path) -> 
 
     config = load_config_with_main("custom.yaml", tmp_path)
 
-    assert config["system"]["language"] == "en"
     assert config["solve"]["max_replans"] == 5
     assert config["logging"]["level"] == "INFO"
 

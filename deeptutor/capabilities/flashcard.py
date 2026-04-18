@@ -92,7 +92,7 @@ class FlashcardCapability(BaseCapability):
             for i, card in enumerate(cards, 1):
                 card.setdefault("id", i)
 
-            await stream.emit(
+            await stream.thinking(
                 "cards_generated",
                 {"cards": cards, "count": len(cards)},
                 source=self.manifest.name,
@@ -106,4 +106,4 @@ class FlashcardCapability(BaseCapability):
                 "review_schedule": schedule,
                 "intervals_days": _EBINGHAUS_INTERVALS,
             }
-            await stream.emit("result", result, source=self.manifest.name)
+            await stream.thinking("result", source=self.manifest.name)

@@ -20,7 +20,6 @@ from deeptutor.core.stream_bus import StreamBus
 
 
 def _install_module(monkeypatch: pytest.MonkeyPatch, fullname: str, **attrs: Any) -> types.ModuleType:
-    __import__("src")
     parts = fullname.split(".")
     for idx in range(1, len(parts)):
         pkg_name = ".".join(parts[:idx])
@@ -433,7 +432,7 @@ async def test_deep_research_capability_requires_explicit_config_and_streams_tra
         def __init__(self, **kwargs: Any) -> None:
             captured["pipeline_init"] = kwargs
 
-        async def run(self, topic: str) -> dict[str, Any]:
+        async def _phase1_planning(self, topic: str) -> str:
             await captured["pipeline_init"]["progress_callback"](
                 {"status": "gathering evidence", "stage": "researching", "block_id": "block_1"}
             )
@@ -455,7 +454,7 @@ async def test_deep_research_capability_requires_explicit_config_and_streams_tra
                     "call_id": "research-tool-1",
                 }
             )
-            return {"report": f"Report about {topic}", "metadata": {"citations": 3}}
+            return topic
 
     def fake_load_config_with_main(_: str) -> dict[str, Any]:
         return {

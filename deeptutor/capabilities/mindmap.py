@@ -117,7 +117,7 @@ class MindmapCapability(BaseCapability):
                 extracted = json.loads(raw.strip().strip("`"))
             except json.JSONDecodeError:
                 extracted = {"root": "主题", "nodes": []}
-            await stream.emit_content(
+            await stream.thinking(
                 f"🧠 提取完成：根节点='{extracted.get('root', '?')}'，"
                 f"共 {len(extracted.get('nodes', []))} 个节点",
                 source=self.manifest.name,
@@ -141,7 +141,7 @@ class MindmapCapability(BaseCapability):
                 tree = json.loads(raw.strip().strip("`"))
             except json.JSONDecodeError:
                 tree = {"name": extracted.get("root", "主题"), "children": []}
-            await stream.emit_content(
+            await stream.thinking(
                 f"🏗️ 结构构建完成：类型={map_type}",
                 source=self.manifest.name,
             )
@@ -159,7 +159,7 @@ class MindmapCapability(BaseCapability):
                 "markdown": markdown,
                 "tree": tree,
             }
-            await stream.emit_content(
+            await stream.thinking(
                 f"🎨 渲染完成：Mermaid {len(mermaid)} chars, Markdown {len(markdown)} chars",
                 source=self.manifest.name,
             )
@@ -168,7 +168,7 @@ class MindmapCapability(BaseCapability):
         async with stream.stage("export", source=self.manifest.name):
             # Store result in context metadata for downstream use
             context.metadata["mindmap_result"] = result
-            await stream.emit_content(
+            await stream.thinking(
                 f"📤 导出就绪：Mermaid / Markdown / JSON 三种格式",
                 source=self.manifest.name,
             )

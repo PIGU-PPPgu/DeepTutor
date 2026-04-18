@@ -144,7 +144,7 @@ function createSessionEntry(key: string, sessionId: string | null = null): Sessi
   return {
     key,
     sessionId,
-    enabledTools: [],
+    enabledTools: ["rag"],
     activeCapability: null,
     knowledgeBases: [],
     messages: [],

@@ -95,7 +95,7 @@ class ContentManagerCapability(BaseCapability):
         # --- Stage 1: identify ---
         async with stream.stage("identify", source=self.manifest.name):
             info = _identify_format(source, attachments)
-            await stream.emit_content(
+            await stream.thinking(
                 f"📂 识别内容：格式={info['format']}，来源={info['source']}",
                 source=self.manifest.name,
             )
@@ -104,7 +104,7 @@ class ContentManagerCapability(BaseCapability):
         processed: dict[str, Any] = {}
         async with stream.stage("process", source=self.manifest.name):
             processed = await self._process(info, attachments, config)
-            await stream.emit_content(
+            await stream.thinking(
                 f"✅ 处理完成：{processed.get('title', '未知标题')} "
                 f"({processed.get('word_count', '?')} 字)",
                 source=self.manifest.name,
@@ -113,7 +113,7 @@ class ContentManagerCapability(BaseCapability):
         # --- Stage 3: index ---
         async with stream.stage("index", source=self.manifest.name):
             index_result = await self._index(processed, kb_name)
-            await stream.emit_content(
+            await stream.thinking(
                 f"🗄️ 入库完成：知识库={kb_name}，分片={index_result['chunks']}",
                 source=self.manifest.name,
             )
@@ -122,7 +122,7 @@ class ContentManagerCapability(BaseCapability):
         async with stream.stage("verify", source=self.manifest.name):
             verify_result = self._verify(index_result)
             status = "✅ 验证通过" if verify_result["ok"] else "⚠️ 验证异常"
-            await stream.emit_content(
+            await stream.thinking(
                 f"{status}：{verify_result['message']}",
                 source=self.manifest.name,
             )

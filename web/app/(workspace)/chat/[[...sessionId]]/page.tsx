@@ -17,6 +17,8 @@ import {
   Microscope,
   PenLine,
   Sparkles,
+  Share2,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -124,7 +126,7 @@ const CAPABILITIES: CapabilityDef[] = [
     description: "Flexible conversation with any tool",
     icon: MessageSquare,
     allowedTools: ["brainstorm", "rag", "web_search", "code_execution", "reason", "paper_search"],
-    defaultTools: [],
+    defaultTools: ["rag"],
   },
   {
     value: "deep_solve",
@@ -165,6 +167,22 @@ const CAPABILITIES: CapabilityDef[] = [
     icon: BarChart3,
     allowedTools: [],
     defaultTools: [],
+  },
+  {
+    value: "knowledge_graph",
+    label: "Knowledge Graph",
+    description: "Build & query knowledge graphs with 7 relation types",
+    icon: Share2,
+    allowedTools: ["rag", "web_search"],
+    defaultTools: ["rag"],
+  },
+  {
+    value: "memory_enhanced_chat",
+    label: "Memory Chat",
+    description: "3-layer memory system: short/medium/long term",
+    icon: Brain,
+    allowedTools: ["rag", "web_search", "reason"],
+    defaultTools: ["rag"],
   },
 ];
 
