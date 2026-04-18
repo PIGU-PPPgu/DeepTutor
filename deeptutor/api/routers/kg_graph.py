@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from deeptutor.services.knowledge_graph.graph_store import list_graphs, load_graph
-from deeptutor.services.knowledge_graph.mastery_tracker import QuizResult, update_from_chat, update_from_quiz
+from deeptutor.services.knowledge_graph.mastery_tracker import QuizResult, update_from_chat, update_from_chat_auto, update_from_quiz, update_from_quiz_dicts
 
 router = APIRouter()
 
@@ -109,3 +109,14 @@ async def mastery_from_quiz(kb_name: str, req: QuizMasteryUpdate):
     """Batch update mastery from quiz results."""
     updated = update_from_quiz(req.results, kb_name)
     return {"updated": updated}
+
+
+class QuizDictResult(BaseModel):
+    results: list[dict]
+
+
+@router.post("/knowledge-graph/{kb_name}/mastery/quiz-dict")
+async def mastery_from_quiz_dict(kb_name: str, req: QuizDictResult):
+    """Update mastery from quiz results as plain dicts ({question, is_correct, topic?})."""
+    update_from_quiz_dicts(kb_name, req.results)
+    return {"status": "ok"}

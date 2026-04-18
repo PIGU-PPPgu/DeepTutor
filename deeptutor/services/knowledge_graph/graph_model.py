@@ -45,14 +45,18 @@ class KnowledgeEdge:
     target_id: str = ""
     relation: str = "related_to"  # prerequisite / contains / related_to / derived_from
     weight: float = 1.0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "source_id": self.source_id,
             "target_id": self.target_id,
             "relation": self.relation,
             "weight": self.weight,
         }
+        if self.metadata:
+            d["metadata"] = self.metadata
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> KnowledgeEdge:

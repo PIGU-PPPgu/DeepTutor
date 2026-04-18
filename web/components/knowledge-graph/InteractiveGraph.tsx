@@ -14,11 +14,13 @@ interface SimNode extends SimulationNodeDatum {
   description: string;
   parent_id: string | null;
   expanded: boolean;
+  metadata?: Record<string, string>;
 }
 
 interface SimLink extends SimulationLinkDatum<SimNode> {
   relation: string;
   weight: number;
+  metadata?: Record<string, string>;
 }
 
 function nodeColor(mastery: number): string {
@@ -30,6 +32,13 @@ function nodeColor(mastery: number): string {
 
 function nodeRadius(level: number): number {
   return [28, 20, 14, 10][level] ?? 10;
+}
+
+function groupColor(group: string): string {
+  const palette = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6"];
+  let hash = 0;
+  for (let i = 0; i < group.length; i++) hash = group.charCodeAt(i) + ((hash << 5) - hash);
+  return palette[Math.abs(hash) % palette.length];
 }
 
 interface Props {
@@ -63,10 +72,19 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
       .on("zoom", (event) => g.attr("transform", event.transform));
     svg.call(zoom);
 
+    // Detect literature graph mode
+    const isLiterature = graph.nodes.some(
+      (n) => (n as any).metadata?.graph_type === "literature"
+    );
+
     // Build simulation data
     const nodeMap = new Map<string, SimNode>();
     const nodes: SimNode[] = graph.nodes.map((n) => {
-      const sn: SimNode = { ...n, expanded: true };
+      const sn: SimNode = {
+        ...n,
+        expanded: true,
+        metadata: (n as any).metadata as Record<string, string> | undefined,
+      };
       nodeMap.set(n.id, sn);
       return sn;
     });
@@ -78,6 +96,7 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
         target: e.target_id,
         relation: e.relation,
         weight: e.weight,
+        metadata: (e as any).metadata as Record<string, string> | undefined,
       }));
 
     const simulation = d3.forceSimulation<SimNode>(nodes)
@@ -94,6 +113,19 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
       .attr("stroke", "#475569")
       .attr("stroke-opacity", 0.4)
       .attr("stroke-width", (d) => Math.max(1, d.weight * 2));
+
+    // Link labels for literature graphs
+    const linkLabel = isLiterature
+      ? g.append("g")
+          .selectAll<SVGTextElement, SimLink>("text")
+          .data(links.filter((l) => !["contains", "involved_in"].includes(l.relation)))
+          .join("text")
+          .attr("text-anchor", "middle")
+          .attr("fill", "#94a3b8")
+          .attr("font-size", 9)
+          .attr("dy", -4)
+          .text((d) => d.relation)
+      : null;
 
     // Nodes
     const node = g.append("g")
@@ -118,16 +150,67 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
           }),
       );
 
-    node.append("circle")
-      .attr("r", (d) => nodeRadius(d.level))
-      .attr("fill", (d) => nodeColor(d.mastery))
-      .attr("stroke", "#1e293b")
-      .attr("stroke-width", 1.5)
-      .style("cursor", "pointer");
+    // Shape by literature type
+    if (isLiterature) {
+      node.each(function (d) {
+        const el = d3.select(this);
+        const charType = d.metadata?.type || "supporting";
+        const group = d.metadata?.group || "";
+        const fill = group ? groupColor(group) : nodeColor(d.mastery);
+        const r = d.level === 0 ? 28 : charType === "protagonist" ? 22 : charType === "antagonist" ? 18 : 12;
+
+        if (charType === "antagonist" && d.level !== 0) {
+          el.append("polygon")
+            .attr("points", `0,${-r} ${r},0 0,${r} ${-r},0`)
+            .attr("fill", fill)
+            .attr("stroke", "#1e293b")
+            .attr("stroke-width", 1.5)
+            .style("cursor", "pointer");
+        } else {
+          el.append("circle")
+            .attr("r", r)
+            .attr("fill", fill)
+            .attr("stroke", "#1e293b")
+            .attr("stroke-width", 1.5)
+            .style("cursor", "pointer");
+        }
+      });
+    } else {
+      node.append("circle")
+        .attr("r", (d) => nodeRadius(d.level))
+        .attr("fill", (d) => nodeColor(d.mastery))
+        .attr("stroke", "#1e293b")
+        .attr("stroke-width", 1.5)
+        .style("cursor", "pointer");
+    }
+
+    // Tooltip on hover
+    const tooltip = g.append("g").style("display", "none");
+    const tooltipBg = tooltip.append("rect").attr("rx", 4).attr("fill", "#1e293b").attr("opacity", 0.9);
+    const tooltipText = tooltip.append("text").attr("fill", "#e2e8f0").attr("font-size", 11).attr("dy", "0.35em");
+
+    node.on("mouseenter", function (_event, d) {
+      if (!d.description) return;
+      tooltipText.text(d.description.length > 60 ? d.description.slice(0, 60) + "\u2026" : d.description);
+      const bbox = tooltipText.node()?.getBBox();
+      if (!bbox) return;
+      tooltipBg.attr("width", bbox.width + 12).attr("height", bbox.height + 8);
+      tooltip.attr("transform", `translate(${d.x!},${(d.y || 0) - 30})`);
+      tooltip.style("display", null);
+    }).on("mouseleave", () => {
+      tooltip.style("display", "none");
+    });
 
     node.append("text")
       .text((d) => d.label)
-      .attr("dy", (d) => nodeRadius(d.level) + 14)
+      .attr("dy", (d) => {
+        if (isLiterature) {
+          const t = d.metadata?.type || "";
+          const r = d.level === 0 ? 28 : t === "protagonist" ? 22 : t === "antagonist" ? 18 : 12;
+          return r + 14;
+        }
+        return nodeRadius(d.level) + 14;
+      })
       .attr("text-anchor", "middle")
       .attr("fill", "#e2e8f0")
       .attr("font-size", (d) => (d.level === 0 ? 12 : 10))
@@ -144,6 +227,11 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
         .attr("y1", (d) => (d.source as SimNode).y!)
         .attr("x2", (d) => (d.target as SimNode).x!)
         .attr("y2", (d) => (d.target as SimNode).y!);
+      if (linkLabel) {
+        linkLabel
+          .attr("x", (d) => ((d.source as SimNode).x! + (d.target as SimNode).x!) / 2)
+          .attr("y", (d) => ((d.source as SimNode).y! + (d.target as SimNode).y!) / 2);
+      }
       node.attr("transform", (d) => `translate(${d.x},${d.y})`);
     });
 

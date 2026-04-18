@@ -534,6 +534,20 @@ class TurnRuntimeManager:
                 if _should_capture_assistant_content(event):
                     assistant_content += event.content
 
+            # Update knowledge graph mastery from chat turn (non-critical)
+            try:
+                from deeptutor.services.knowledge_graph.mastery_tracker import update_from_chat_auto
+
+                knowledge_bases = payload.get("knowledge_bases", [])
+                if knowledge_bases:
+                    await update_from_chat_auto(
+                        kb_name=knowledge_bases[0],
+                        user_message=raw_user_content,
+                        assistant_response=assistant_content,
+                    )
+            except Exception:
+                pass  # Non-critical, don't break the turn
+
             await self.store.add_message(
                 session_id=session_id,
                 role="assistant",

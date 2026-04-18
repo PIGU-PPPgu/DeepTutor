@@ -188,6 +188,25 @@ class DeepQuestionCapability(BaseCapability):
             result_payload["metadata"] = {"cost_summary": cost_meta}
         await stream.result(result_payload, source=self.name)
 
+        # Sync quiz results to knowledge graph (non-critical)
+        try:
+            from deeptutor.services.knowledge_graph.mastery_tracker import update_from_quiz_dicts
+            kbs = context.knowledge_bases or []
+            if kbs and result and isinstance(result, dict):
+                quiz_results = []
+                for item in result.get("results", []):
+                    qa = item.get("qa_pair", {}) if isinstance(item, dict) else {}
+                    if qa:
+                        quiz_results.append({
+                            "question": qa.get("question", ""),
+                            "is_correct": bool(qa.get("is_correct", False)),
+                            "topic": str(overrides.get("topic", "") or ""),
+                        })
+                if quiz_results:
+                    update_from_quiz_dicts(kbs[0], quiz_results)
+        except Exception:
+            pass  # Non-critical
+
     @staticmethod
     def _collect_cost_summary(module_name: str) -> dict[str, Any] | None:
         from deeptutor.agents.base_agent import BaseAgent
