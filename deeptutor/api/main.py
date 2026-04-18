@@ -217,6 +217,10 @@ from deeptutor.api.routers import (
     vision_solver,
     question_notebook,
     kg_graph,
+    audio,
+    learning_plan,
+    parent_report,
+    assessment,
 )
 
 # Include routers
@@ -239,9 +243,13 @@ app.include_router(agent_config.router, prefix="/api/v1/agent-config", tags=["ag
 app.include_router(vision_solver.router, prefix="/api/v1", tags=["vision-solver"])
 app.include_router(tutorbot.router, prefix="/api/v1/tutorbot", tags=["tutorbot"])
 app.include_router(kg_graph.router, prefix="/api/v1", tags=["knowledge-graph"])
+app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
+app.include_router(learning_plan.router, prefix="/api/v1", tags=["learning-plan"])
+app.include_router(parent_report.router, prefix="/api/v1", tags=["parent-report"])
 
 # Unified WebSocket endpoint
 app.include_router(unified_ws.router, prefix="/api/v1", tags=["unified-ws"])
+app.include_router(assessment.router, tags=["assessment"])
 
 
 @app.get("/")

@@ -4,17 +4,234 @@ Learning Guide Capability
 
 个性化学习计划生成：根据学生年级、当前进度、可用时间，生成每日学习任务。
 Stages: profile → diagnose → plan → schedule
+
+支持两种模式：
+1. 对话式（通过 run 方法，LLM 多阶段生成）
+2. 知识图谱驱动（通过 generate_plan 静态方法，基于掌握度数据）
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import math
+from collections import defaultdict
+from datetime import datetime
 
 from deeptutor.capabilities.request_contracts import get_capability_request_schema
 from deeptutor.core.capability_protocol import BaseCapability, CapabilityManifest
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream_bus import StreamBus
 
+logger = logging.getLogger(__name__)
+
+# ---- Knowledge-graph driven plan generation ----
+
+# Thresholds
+WEAK_THRESHOLD = 0.3
+TOPICS_PER_DAY = 3
+MINUTES_PER_TOPIC = 25
+EXERCISES_PER_TOPIC = 5
+
+
+def _build_prerequisite_map(graph) -> dict[str, list[str]]:
+    """Build a map: node_id -> list of prerequisite node_ids."""
+    prereqs: dict[str, list[str]] = defaultdict(list)
+    for edge in graph.edges:
+        if edge.relation == "prerequisite":
+            prereqs[edge.target_id].append(edge.source_id)
+    return prereqs
+
+
+def _topological_sort_weak(weak_nodes: list, graph) -> list:
+    """Topologically sort weak nodes respecting prerequisite edges.
+
+    Nodes whose prerequisites are NOT in the weak set (i.e. already mastered or
+    not applicable) come first, so we always learn foundational topics first.
+    """
+    weak_ids = {n.id for n in weak_nodes}
+    prereqs = _build_prerequisite_map(graph)
+
+    # Build adjacency: for each weak node, which other weak nodes must come before it?
+    in_degree: dict[str, int] = {n.id: 0 for n in weak_nodes}
+    adj: dict[str, list[str]] = defaultdict(list)
+
+    for n in weak_nodes:
+        for pid in prereqs.get(n.id, []):
+            if pid in weak_ids:
+                adj[pid].append(n.id)
+                in_degree[n.id] += 1
+
+    # Kahn's algorithm
+    queue = [nid for nid, deg in in_degree.items() if deg == 0]
+    # Secondary sort: lower mastery first (bigger gaps first among equal-topology nodes)
+    node_map = {n.id: n for n in weak_nodes}
+    queue.sort(key=lambda nid: node_map[nid].mastery)
+
+    result: list = []
+    while queue:
+        nid = queue.pop(0)
+        result.append(node_map[nid])
+        for child in adj.get(nid, []):
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+                queue.sort(key=lambda x: node_map[x].mastery)
+
+    # Any remaining nodes (cycles) — append as-is
+    visited = {n.id for n in result}
+    for n in weak_nodes:
+        if n.id not in visited:
+            result.append(n)
+
+    return result
+
+
+def _estimate_goal(mastery: float) -> str:
+    """Generate a learning goal description based on current mastery level."""
+    if mastery < 0.1:
+        return "理解基本概念，能识别相关题型"
+    elif mastery < 0.2:
+        return "掌握核心法则，能完成基础练习"
+    else:
+        return "熟练运用，减少常见错误"
+
+
+async def _llm_enhance_topics(topics_info: list[dict], kb_name: str) -> list[dict]:
+    """Use LLM to enrich topic data with better goals and exercise suggestions."""
+    from deeptutor.services.llm import complete
+
+    prompt = (
+        f"你是一位K12教育专家。以下是从「{kb_name}」知识图谱中提取的薄弱知识点：\n\n"
+        f"{json.dumps(topics_info, ensure_ascii=False, indent=2)}\n\n"
+        f"请为每个知识点补充：\n"
+        f"1. goal: 具体的学习目标（一句话）\n"
+        f"2. exercise_hint: 推荐练习类型（如：计算题、应用题、概念辨析等）\n\n"
+        f"返回与输入相同格式的 JSON 列表，只补充 goal 和 exercise_hint 字段。"
+    )
+
+    try:
+        response = await complete(
+            prompt,
+            system_prompt="你是K12教育专家，只返回纯JSON数组。",
+            temperature=0.5,
+        )
+        text = response.strip()
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start >= 0 and end > start:
+            enriched = json.loads(text[start:end])
+            return enriched
+    except Exception:
+        logger.debug("LLM enhancement failed, using defaults", exc_info=True)
+    return topics_info
+
+
+async def generate_plan(kb_name: str) -> dict | None:
+    """Generate a structured learning plan from knowledge graph data.
+
+    Returns the plan dict matching the spec format, or None if graph not found.
+    """
+    from deeptutor.services.knowledge_graph.graph_store import load_graph
+
+    graph = load_graph(kb_name)
+    if not graph:
+        return None
+
+    weak_nodes = graph.get_weak_nodes(WEAK_THRESHOLD)
+    if not weak_nodes:
+        return {
+            "kb_name": kb_name,
+            "total_weak_points": 0,
+            "estimated_days": 0,
+            "daily_plans": [],
+            "message": "没有发现薄弱知识点，继续保持！",
+        }
+
+    # Sort by prerequisites (foundational first)
+    sorted_nodes = _topological_sort_weak(weak_nodes, graph)
+
+    # Build topic info for LLM enrichment
+    topics_info = [
+        {
+            "name": n.label,
+            "node_id": n.id,
+            "mastery": n.mastery,
+            "description": n.description or "",
+        }
+        for n in sorted_nodes
+    ]
+
+    # LLM enrichment (best-effort)
+    enriched = await _llm_enhance_topics(topics_info, kb_name)
+
+    # Merge enriched data back
+    enriched_map = {e.get("name", ""): e for e in enriched}
+    for n in sorted_nodes:
+        info = enriched_map.get(n.label, {})
+        n._goal = info.get("goal", _estimate_goal(n.mastery))
+        n._exercise_hint = info.get("exercise_hint", "基础练习")
+    # Fallback for nodes not in enriched
+    for n in sorted_nodes:
+        if not hasattr(n, "_goal"):
+            n._goal = _estimate_goal(n.mastery)
+            n._exercise_hint = "基础练习"
+
+    # Build daily plans
+    total = len(sorted_nodes)
+    days = math.ceil(total / TOPICS_PER_DAY)
+    daily_plans = []
+
+    for day_idx in range(days):
+        start = day_idx * TOPICS_PER_DAY
+        end = min(start + TOPICS_PER_DAY, total)
+        day_nodes = sorted_nodes[start:end]
+
+        topics = []
+        for n in day_nodes:
+            # Scale exercise count and time by mastery gap
+            gap = WEAK_THRESHOLD - n.mastery
+            exercises = max(3, min(8, int(EXERCISES_PER_TOPIC * (1 + gap))))
+            minutes = max(15, min(40, int(MINUTES_PER_TOPIC * (1 + gap * 2))))
+
+            topics.append({
+                "name": n.label,
+                "node_id": n.id,
+                "mastery": round(n.mastery, 2),
+                "goal": n._goal,
+                "exercise_hint": n._exercise_hint,
+                "exercises": exercises,
+                "minutes": minutes,
+            })
+
+        daily_plans.append({
+            "day": day_idx + 1,
+            "topics": topics,
+        })
+
+    return {
+        "kb_name": kb_name,
+        "total_weak_points": total,
+        "estimated_days": days,
+        "daily_plans": daily_plans,
+        "generated_at": datetime.now().isoformat(),
+    }
+
+
+# ---- In-memory plan cache (simple; production would use DB) ----
+
+_plan_cache: dict[str, dict] = {}
+
+
+def save_plan(kb_name: str, plan: dict) -> None:
+    _plan_cache[kb_name] = plan
+
+
+def get_cached_plan(kb_name: str) -> dict | None:
+    return _plan_cache.get(kb_name)
+
+
+# ---- LLM-based conversation mode (original capability) ----
 
 PROFILE_SYSTEM = """\
 你是一位专业的学习规划师。根据用户提供的学生信息，提取以下画像要素：
@@ -96,7 +313,6 @@ async def _llm_call(messages: list[dict]) -> str:
     from deeptutor.services.llm.config import get_llm_config
 
     config = get_llm_config()
-    # Merge system prompt + user messages into a single prompt string
     combined = ""
     for msg in messages:
         role = msg.get("role", "user")
@@ -119,18 +335,15 @@ async def _llm_call(messages: list[dict]) -> str:
 
 def _extract_json(text: str) -> dict | list | None:
     """Try to extract JSON from LLM output."""
-    # Try direct parse first
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
-        # Remove first and last ``` lines
         lines = [l for l in lines if not l.strip().startswith("```")]
         text = "\n".join(lines).strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Try to find JSON block
     start = text.find("{")
     if start == -1:
         start = text.find("[")
@@ -218,10 +431,8 @@ class LearningGuideCapability(BaseCapability):
             ]
             schedule_text = await _llm_call(schedule_messages)
 
-            # Output the final schedule as content
             await stream.content(schedule_text, source=self.manifest.name, stage="schedule")
 
-        # Emit structured result
         await stream.result(
             {
                 "student": student_profile,
