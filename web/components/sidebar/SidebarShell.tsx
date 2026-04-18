@@ -10,6 +10,7 @@ import {
   Brain,
   GraduationCap,
   MessageSquare,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
@@ -35,6 +36,7 @@ const PRIMARY_NAV: NavEntry[] = [
   { href: "/guide", label: "Guided Learning", icon: GraduationCap },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/memory", label: "Memory", icon: Brain },
+  { href: "/graph", label: "Knowledge Graph", icon: Network },
 ];
 
 const SECONDARY_NAV: NavEntry[] = [{ href: "/settings", label: "Settings", icon: Settings }];
