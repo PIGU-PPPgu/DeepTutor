@@ -50,7 +50,7 @@ class KnowledgeExpansionAgent:
 
             logger.info("Depth %d: expanding %d leaf nodes", depth, len(leaves))
 
-            for batch in _chunk(leaves, 10):
+            for batch in _chunk(leaves, 5):
                 if len(graph.nodes) >= self.target_nodes:
                     break
                 await self._expand_batch(graph, batch)
@@ -97,14 +97,16 @@ class KnowledgeExpansionAgent:
         try:
             from deeptutor.services.llm import complete
 
-            response = await complete(prompt, system_prompt="你是JSON生成器。只返回纯JSON。")
+            response = await complete(prompt, system_prompt="你是JSON生成器。只返回纯JSON。", temperature=0.3)
         except Exception:
             logger.exception("LLM call failed during expansion")
             return
 
-        data = _extract_json(response)
-        if not data:
-            logger.warning("Failed to extract JSON from expansion response")
+        try:
+            data = _extract_json(response)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse expansion JSON: {e}")
+            # Try smaller batch
             return
 
         for expansion in data.get("expansions", []):

@@ -97,7 +97,7 @@ def _is_literature_content(kb_name: str, content: str) -> bool:
 
 
 def _extract_json(text: str) -> dict:
-    """Extract JSON from LLM response, handling code fences."""
+    """Extract JSON from LLM response, handling code fences and truncation."""
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
@@ -107,11 +107,26 @@ def _extract_json(text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start >= 0 and end > start:
-            return json.loads(text[start:end])
-        raise
+        pass
+    # Try extracting first valid JSON object
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        candidate = text[start:end]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        # Try to fix truncated JSON: find last complete expansion
+        # Look for the last "}]" pattern
+        last_complete = candidate.rfind("}]")
+        if last_complete > 0:
+            truncated = candidate[:last_complete + 2] + "}]}}"
+            try:
+                return json.loads(truncated)
+            except json.JSONDecodeError:
+                pass
+    raise ValueError(f"Could not extract valid JSON from response (len={len(text)})")
 
 
 async def generate_literature_graph(content: str, kb_name: str) -> KnowledgeGraph:

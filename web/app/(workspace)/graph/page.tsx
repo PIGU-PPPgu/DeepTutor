@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { InteractiveGraph } from "@/components/knowledge-graph/InteractiveGraph";
 import { GraphStats } from "@/components/knowledge-graph/GraphStats";
+import { GraphTree } from "@/components/knowledge-graph/GraphTree";
 import {
   fetchGraph,
   listGraphs,
@@ -24,6 +25,8 @@ export default function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<KGNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [treeSearch, setTreeSearch] = useState("");
+  const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     listGraphs().then((r) => setGraphs(r.graphs)).catch(() => {});
@@ -98,6 +101,22 @@ export default function GraphPage() {
 
   return (
     <div className="flex h-full">
+      {/* Left: Tree navigation */}
+      {graph && (
+        <GraphTree
+          nodes={graph.nodes}
+          edges={graph.edges}
+          selectedNodeId={highlightNodeId}
+          onSelect={(id) => {
+            setHighlightNodeId(id);
+            const node = graph.nodes.find((n) => n.id === id);
+            if (node) setSelectedNode(node);
+          }}
+          searchQuery={treeSearch}
+          onSearchChange={setTreeSearch}
+        />
+      )}
+
       {/* Main graph area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
