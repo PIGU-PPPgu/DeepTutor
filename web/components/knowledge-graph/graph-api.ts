@@ -72,6 +72,13 @@ export function getWeakNodes(kbName: string, threshold = 0.3): Promise<{ nodes: 
   return request(`/api/v1/knowledge-graph/${encodeURIComponent(kbName)}/weak?threshold=${threshold}`);
 }
 
+export function expandGraph(kbName: string, maxDepth = 5, targetNodes = 1500): Promise<{ nodes: number; edges: number; graph: KGGraph }> {
+  return request(`/api/v1/knowledge-graph/${encodeURIComponent(kbName)}/expand`, {
+    method: "POST",
+    body: JSON.stringify({ max_depth: maxDepth, target_nodes: targetNodes }),
+  });
+}
+
 export function listGraphs(): Promise<{ graphs: string[] }> {
   return request("/api/v1/knowledge-graph");
 }

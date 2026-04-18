@@ -9,6 +9,7 @@ import {
   generateGraph,
   getWeakNodes,
   fetchStats,
+  expandGraph,
   type KGGraph,
   type KGNode,
   type KGStats,
@@ -48,6 +49,30 @@ export default function GraphPage() {
       setLoading(false);
     }
   }, []);
+
+  const [expandStatus, setExpandStatus] = useState("");
+
+  const handleExpand = async () => {
+    if (!selectedKb) return;
+    setExpandStatus("正在拆解...");
+    setLoading(true);
+    try {
+      const r = await expandGraph(selectedKb, 5, 1500);
+      setGraph(r.graph);
+      const [s, w] = await Promise.all([
+        fetchStats(selectedKb).catch(() => null),
+        getWeakNodes(selectedKb).then((r) => r.nodes).catch(() => []),
+      ]);
+      setStats(s);
+      setWeakNodes(w);
+      setExpandStatus(`拆解完成：${r.nodes} 节点，${r.edges} 边`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "拆解失败");
+      setExpandStatus("");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!selectedKb) return;
@@ -100,6 +125,16 @@ export default function GraphPage() {
           >
             {loading ? "生成中..." : "生成图谱"}
           </button>
+
+          {selectedKb && (
+            <button
+              onClick={handleExpand}
+              disabled={!selectedKb || loading}
+              className="px-3 py-1.5 text-sm rounded bg-orange-600 text-white disabled:opacity-50"
+            >
+              {expandStatus || "深度拆解"}
+            </button>
+          )}
 
           {selectedKb && (
             <button

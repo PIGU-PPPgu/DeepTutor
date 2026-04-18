@@ -111,8 +111,30 @@ async def mastery_from_quiz(kb_name: str, req: QuizMasteryUpdate):
     return {"updated": updated}
 
 
+class ExpandRequest(BaseModel):
+    max_depth: int = 5
+    target_nodes: int = 1500
+
+
 class QuizDictResult(BaseModel):
     results: list[dict]
+
+
+@router.post("/knowledge-graph/{kb_name}/expand")
+async def expand_graph(kb_name: str, req: ExpandRequest):
+    """Expand knowledge graph to finer granularity."""
+    from deeptutor.services.knowledge_graph.expansion_agent import KnowledgeExpansionAgent
+    try:
+        agent = KnowledgeExpansionAgent(
+            kb_name=kb_name,
+            max_depth=req.max_depth,
+            target_nodes=req.target_nodes,
+        )
+        graph = await agent.expand()
+        return {"nodes": len(graph.nodes), "edges": len(graph.edges), "graph": graph.to_dict()}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Expansion failed: {e}")
 
 
 @router.post("/knowledge-graph/{kb_name}/mastery/quiz-dict")

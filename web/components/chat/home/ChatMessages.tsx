@@ -23,7 +23,11 @@ import { extractQuizQuestions } from "@/lib/quiz-types";
 import { extractVisualizeResult } from "@/lib/visualize-types";
 import type { StreamEvent } from "@/lib/unified-ws";
 import { hasVisibleMarkdownContent } from "@/lib/markdown-display";
+import { detectTopics } from "@/lib/topic-detector";
+import type { KGGraph } from "@/components/knowledge-graph/graph-api";
 import { CallTracePanel } from "./TracePanels";
+
+const MiniGraphCard = dynamic(() => import("@/components/chat/MiniGraphCard").then((m) => ({ default: m.MiniGraphCard })), { ssr: false });
 
 const MathAnimatorViewer = dynamic(
   () => import("@/components/math-animator/MathAnimatorViewer"),
@@ -368,6 +372,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   onCopyAssistantMessage,
   onRetryMessage,
   onConfirmOutline,
+  graphData,
+  kbName,
 }: {
   messages: ChatMessageItem[];
   isStreaming: boolean;
@@ -383,6 +389,8 @@ export const ChatMessageList = memo(function ChatMessageList({
   onCopyAssistantMessage: (content: string) => void | Promise<void>;
   onRetryMessage: (snapshot?: MessageRequestSnapshot) => void;
   onConfirmOutline?: (outline: Array<{ title: string; overview: string }>, topic: string, researchConfig?: Record<string, unknown> | null) => void;
+  graphData?: KGGraph | null;
+  kbName?: string;
 }) {
   const { t } = useTranslation();
   const outlineStatusByIndex = useMemo(() => {
@@ -472,6 +480,14 @@ export const ChatMessageList = memo(function ChatMessageList({
               language={language}
               onConfirmOutline={onConfirmOutline}
             />
+            {/* Mini graph card for detected topics */}
+            {(() => {
+              if (!graphData || !kbName || msg.role !== "assistant" || msg.capability === "deep_research") return null;
+              const combined = (pairedUserMessage?.content || "") + " " + msg.content;
+              const detectedTopics = detectTopics(combined, graphData);
+              if (!detectedTopics.length) return null;
+              return <MiniGraphCard topics={detectedTopics} kbName={kbName} />;
+            })()}
             {(showActions || costSummary) && (
               <div className="mt-2 flex items-center">
                 {showActions && (

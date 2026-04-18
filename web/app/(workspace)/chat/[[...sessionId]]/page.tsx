@@ -28,8 +28,13 @@ import ChatComposer from "@/components/chat/home/ChatComposer";
 import { ChatMessageList } from "@/components/chat/home/ChatMessages";
 import { useUnifiedChat, type MessageRequestSnapshot } from "@/context/UnifiedChatContext";
 import type { StreamEvent } from "@/lib/unified-ws";
+import { fetchStats, type KGStats } from "@/components/knowledge-graph/graph-api";
 import { extractBase64FromDataUrl, readFileAsDataUrl } from "@/lib/file-attachments";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
+import { KnowledgeGraphPanel } from "@/components/chat/KnowledgeGraphPanel";
+import { MiniGraphCard } from "@/components/chat/MiniGraphCard";
+import { detectTopics } from "@/lib/topic-detector";
+import { fetchGraph, type KGGraph } from "@/components/knowledge-graph/graph-api";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import {
   loadCapabilityPlaygroundConfigs,
@@ -243,6 +248,8 @@ export default function ChatPage() {
   const [researchConfig, setResearchConfig] = useState<DeepResearchFormConfig>(createEmptyResearchConfig());
   const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [graphData, setGraphData] = useState<KGGraph | null>(null);
+  const [graphStats, setGraphStats] = useState<KGStats | null>(null);
   const [showNotebookPicker, setShowNotebookPicker] = useState(false);
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
@@ -417,6 +424,14 @@ export default function ChatPage() {
       router.replace(`/chat/${state.sessionId}`, { scroll: false });
     }
   }, [state.sessionId, sessionIdParam, router]);
+
+  // Load graph data when KB changes
+  useEffect(() => {
+    const kb = state.knowledgeBases[0];
+    if (!kb) { setGraphData(null); setGraphStats(null); return; }
+    fetchGraph(kb).then(setGraphData).catch(() => setGraphData(null));
+    fetchStats(kb).then(setGraphStats).catch(() => setGraphStats(null));
+  }, [state.knowledgeBases[0]]);
 
   /* Load KBs */
   useEffect(() => {
@@ -624,7 +639,23 @@ export default function ChatPage() {
   }, [router]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[var(--background)]">
+    <>
+    <div className="flex h-full overflow-hidden bg-[var(--background)]">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mastery progress bar */}
+        {graphStats && state.knowledgeBases[0] && (
+          <div className="px-6 pt-2 group relative">
+            <div className="h-1 bg-[var(--secondary)] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-500 via-yellow-500 to-red-500"
+                style={{ width: `${graphStats.mastery_avg * 100}%` }}
+              />
+            </div>
+            <div className="absolute top-6 left-6 hidden group-hover:block z-10 bg-[var(--card)] border border-[var(--border)] rounded-lg p-2 text-[10px] text-[var(--muted-foreground)] shadow-lg whitespace-nowrap">
+              <div>已掌握: {graphStats.mastered} · 学习中: {graphStats.learning} · 薄弱: {graphStats.weak} · 未学习: {graphStats.unstudied}</div>
+            </div>
+          </div>
+        )}
       <div className="mx-auto flex w-full max-w-[960px] flex-1 min-h-0 flex-col overflow-hidden px-6">
 
         {!hasMessages ? (
@@ -678,6 +709,8 @@ export default function ChatPage() {
               onCopyAssistantMessage={copyAssistantMessage}
               onRetryMessage={handleRetryMessage}
               onConfirmOutline={handleConfirmOutline}
+              graphData={graphData}
+              kbName={state.knowledgeBases[0] || undefined}
             />
             <div ref={messagesEndRef} className="h-px w-full shrink-0" />
           </div>
@@ -747,6 +780,14 @@ export default function ChatPage() {
           onToggleResearchCollapsed={handleToggleResearchCollapsed}
         />
       </div>
+      </div>
+    </div>
+    <KnowledgeGraphPanel
+        kbName={state.knowledgeBases[0] || null}
+        onNodeClick={(nodeId, label) => {
+          sendMessage(`请帮我复习知识点: ${label}`, [], undefined, undefined, undefined);
+        }}
+      />
       <NotebookRecordPicker
         open={showNotebookPicker}
         onClose={handleCloseNotebookPicker}
@@ -762,6 +803,6 @@ export default function ChatPage() {
         payload={chatSavePayload}
         onClose={handleCloseSaveModal}
       />
-    </div>
+    </>
   );
 }
