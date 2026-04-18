@@ -121,8 +121,8 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
           .data(links.filter((l) => !["contains", "involved_in"].includes(l.relation)))
           .join("text")
           .attr("text-anchor", "middle")
-          .attr("fill", "#94a3b8")
-          .attr("font-size", 9)
+          .attr("fill", "#64748b")
+          .attr("font-size", 10)
           .attr("dy", -4)
           .text((d) => d.relation)
       : null;
@@ -185,17 +185,21 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
     }
 
     // Tooltip on hover
-    const tooltip = g.append("g").style("display", "none");
-    const tooltipBg = tooltip.append("rect").attr("rx", 4).attr("fill", "#1e293b").attr("opacity", 0.9);
-    const tooltipText = tooltip.append("text").attr("fill", "#e2e8f0").attr("font-size", 11).attr("dy", "0.35em");
+    const tooltip = g.append("g").style("display", "none").style("pointer-events", "none");
+    const tooltipBg = tooltip.append("rect").attr("rx", 6).attr("fill", "#0f172a").attr("stroke", "#475569").attr("stroke-width", 1).attr("opacity", 0.95);
+    const tooltipText = tooltip.append("text").attr("fill", "#f1f5f9").attr("font-size", 12).attr("dy", "0.35em");
 
     node.on("mouseenter", function (_event, d) {
       if (!d.description) return;
-      tooltipText.text(d.description.length > 60 ? d.description.slice(0, 60) + "\u2026" : d.description);
+      const maxLen = 80;
+      tooltipText.text(d.description.length > maxLen ? d.description.slice(0, maxLen) + "\u2026" : d.description);
       const bbox = tooltipText.node()?.getBBox();
       if (!bbox) return;
-      tooltipBg.attr("width", bbox.width + 12).attr("height", bbox.height + 8);
-      tooltip.attr("transform", `translate(${d.x!},${(d.y || 0) - 30})`);
+      const padX = 10, padY = 6;
+      tooltipBg.attr("width", bbox.width + padX * 2).attr("height", bbox.height + padY * 2);
+      tooltipText.attr("x", padX).attr("dy", bbox.height + padY - 2);
+      const nodeR = d.level === 0 ? 28 : 12;
+      tooltip.attr("transform", `translate(${(d.x || 0) - (bbox.width + padX * 2) / 2},${(d.y || 0) - nodeR - bbox.height - padY * 2 - 4})`);
       tooltip.style("display", null);
     }).on("mouseleave", () => {
       tooltip.style("display", "none");
@@ -212,7 +216,7 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
         return nodeRadius(d.level) + 14;
       })
       .attr("text-anchor", "middle")
-      .attr("fill", "#e2e8f0")
+      .attr("fill", "#f8fafc")
       .attr("font-size", (d) => (d.level === 0 ? 12 : 10))
       .style("pointer-events", "none");
 
