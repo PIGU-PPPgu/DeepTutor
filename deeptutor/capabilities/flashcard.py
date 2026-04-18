@@ -106,4 +106,9 @@ class FlashcardCapability(BaseCapability):
                 "review_schedule": schedule,
                 "intervals_days": _EBINGHAUS_INTERVALS,
             }
-            await stream.thinking("result", source=self.manifest.name)
+            # Format cards as readable content
+            lines = ["## 闪卡生成结果\n"]
+            for card in cards:
+                lines.append(f"**{card.get('front', card.get('question', ''))}** → {card.get('back', card.get('answer', ''))}")
+            lines.append(f"\n📋 共 {len(cards)} 张闪卡，复习周期：{schedule}")
+            await stream.content("\n".join(lines), source=self.manifest.name)

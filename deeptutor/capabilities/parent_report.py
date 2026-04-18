@@ -145,4 +145,4 @@ class ParentReportCapability(BaseCapability):
                 "analysis": analysis,
                 "suggestions": suggestions,
             }
-            await stream.thinking("result", source=self.manifest.name)
+            await stream.content(report_md, source=self.manifest.name)

@@ -52,7 +52,7 @@ export default function GitSyncButton() {
         <div>
           <h3 className="text-sm font-semibold">一键同步主仓库</h3>
           <p className="text-xs text-muted-foreground">
-            与 DeepTutor 上游仓库保持同步，获取最新功能
+            与 IntelliTutor 上游仓库保持同步，获取最新功能
           </p>
         </div>
       </div>

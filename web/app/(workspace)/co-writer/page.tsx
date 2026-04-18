@@ -67,8 +67,8 @@ interface KnowledgeBase {
   is_default?: boolean;
 }
 
-const STORAGE_KEY = "deeptutor.co_writer.draft";
-const HISTORY_KEY = "deeptutor.co_writer.history";
+const STORAGE_KEY = "intellitutor.co_writer.draft";
+const HISTORY_KEY = "intellitutor.co_writer.history";
 
 const ACTION_LABELS: Record<EditAction, string> = {
   rewrite: "Rewrite",

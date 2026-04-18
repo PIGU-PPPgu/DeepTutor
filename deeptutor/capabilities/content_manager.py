@@ -122,8 +122,13 @@ class ContentManagerCapability(BaseCapability):
         async with stream.stage("verify", source=self.manifest.name):
             verify_result = self._verify(index_result)
             status = "✅ 验证通过" if verify_result["ok"] else "⚠️ 验证异常"
-            await stream.thinking(
-                f"{status}：{verify_result['message']}",
+            await stream.content(
+                f"## 内容导入完成\n\n"
+                f"- 标题：{processed.get('title', '未知')}\n"
+                f"- 字数：{processed.get('word_count', '?')}\n"
+                f"- 知识库：{kb_name}\n"
+                f"- 分片数：{index_result['chunks']}\n"
+                f"- 状态：{status}",
                 source=self.manifest.name,
             )
 

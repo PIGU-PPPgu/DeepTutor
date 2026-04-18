@@ -305,20 +305,32 @@ class KnowledgeGraphCapability(BaseCapability):
 
         async with stream.stage("build", source=self.manifest.name):
             for t in triples:
-                graph.add_triple(
-                    subject=t["subject"],
-                    relation=t["relation"],
-                    obj=t["object"],
-                    subject_desc=t.get("subject_description", ""),
-                    obj_desc=t.get("object_description", ""),
-                    difficulty=t.get("difficulty", 0),
-                )
+                if not isinstance(t, dict):
+                    continue
+                try:
+                    graph.add_triple(
+                        subject=str(t.get("subject", "")),
+                        relation=str(t.get("relation", "")),
+                        obj=str(t.get("object", "")),
+                        subject_desc=str(t.get("subject_description", "")),
+                        obj_desc=str(t.get("object_description", "")),
+                        difficulty=int(t.get("difficulty", 0)),
+                    )
+                except Exception as e:
+                    logger.warning(f"Skipping invalid triple: {e}")
+                    continue
             await stream.thinking(f"构建图谱：{len(graph.nodes)} 个节点，{len(graph.edges)} 条边", source=self.manifest.name)
 
         async with stream.stage("visualize", source=self.manifest.name):
-            mermaid = graph.to_mermaid()
-            outline = graph.to_markdown_outline()
-            await stream.result(f"## 知识图谱大纲\n\n{outline}\n\n## Mermaid 图\n\n{mermaid}", source=self.manifest.name)
+            try:
+                mermaid = graph.to_mermaid()
+            except Exception:
+                mermaid = "(图谱生成失败)"
+            try:
+                outline = graph.to_markdown_outline()
+            except Exception:
+                outline = "(大纲生成失败)"
+            await stream.content(f"## 知识图谱大纲\n\n{outline}\n\n## Mermaid 图\n\n{mermaid}", source=self.manifest.name)
 
     async def _extract_triples(self, content: str) -> list[dict[str, Any]]:
         from deeptutor.services.llm import complete
@@ -339,13 +351,33 @@ class KnowledgeGraphCapability(BaseCapability):
     def _parse_triples(text: str) -> list[dict[str, Any]]:
         """Parse JSON from LLM response, tolerating markdown fences."""
         text = text.strip()
+        # Strip markdown fences
         if text.startswith("```"):
             lines = text.splitlines()
             lines = [l for l in lines if not l.strip().startswith("```")]
-            text = "\n".join(lines)
+            text = "\n".join(lines).strip()
+        # Try direct JSON parse
         try:
             data = json.loads(text)
-            return data.get("triples", [])
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                return data.get("triples", data.get("data", []))
         except json.JSONDecodeError:
-            logger.warning("Failed to parse triples JSON from LLM")
-            return []
+            pass
+        # Try extracting JSON from text (find first [ or {)
+        for start_char, end_char in [('[', ']'), ('{', '}')]:
+            start = text.find(start_char)
+            if start >= 0:
+                end = text.rfind(end_char)
+                if end > start:
+                    try:
+                        data = json.loads(text[start:end + 1])
+                        if isinstance(data, list):
+                            return data
+                        if isinstance(data, dict):
+                            return data.get("triples", data.get("data", []))
+                    except json.JSONDecodeError:
+                        continue
+        logger.warning("Failed to parse triples JSON from LLM")
+        return []

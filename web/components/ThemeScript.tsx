@@ -8,7 +8,7 @@ export default function ThemeScript() {
   const themeScript = `
     (function() {
       try {
-        const stored = localStorage.getItem('deeptutor-theme');
+        const stored = localStorage.getItem('intellitutor-theme');
 
         document.documentElement.classList.remove('dark', 'theme-glass', 'theme-snow');
 
@@ -24,9 +24,9 @@ export default function ThemeScript() {
           // Use system preference if not set
           if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
             document.documentElement.classList.add('dark');
-            localStorage.setItem('deeptutor-theme', 'dark');
+            localStorage.setItem('intellitutor-theme', 'dark');
           } else {
-            localStorage.setItem('deeptutor-theme', 'light');
+            localStorage.setItem('intellitutor-theme', 'light');
           }
         }
       } catch (e) {

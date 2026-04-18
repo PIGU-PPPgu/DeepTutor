@@ -18,11 +18,11 @@ import {
 
 export type AppLanguage = "en" | "zh";
 
-export const ACTIVE_SESSION_STORAGE_KEY = "deeptutor.activeSessionId.tab";
-export const LANGUAGE_STORAGE_KEY = "deeptutor-language";
+export const ACTIVE_SESSION_STORAGE_KEY = "intellitutor.activeSessionId.tab";
+export const LANGUAGE_STORAGE_KEY = "intellitutor-language";
 
-const ACTIVE_SESSION_EVENT = "deeptutor:active-session";
-const LANGUAGE_EVENT = "deeptutor:language";
+const ACTIVE_SESSION_EVENT = "intellitutor:active-session";
+const LANGUAGE_EVENT = "intellitutor:language";
 
 function normalizeLanguage(value: string | null | undefined): AppLanguage {
   return value === "zh" ? "zh" : "en";

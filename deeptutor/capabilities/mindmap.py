@@ -168,6 +168,10 @@ class MindmapCapability(BaseCapability):
         async with stream.stage("export", source=self.manifest.name):
             # Store result in context metadata for downstream use
             context.metadata["mindmap_result"] = result
+            await stream.content(
+                f"## 思维导图\n\n{markdown}",
+                source=self.manifest.name,
+            )
             await stream.thinking(
                 f"📤 导出就绪：Mermaid / Markdown / JSON 三种格式",
                 source=self.manifest.name,

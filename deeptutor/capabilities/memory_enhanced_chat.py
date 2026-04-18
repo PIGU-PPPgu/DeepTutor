@@ -145,7 +145,7 @@ class MemoryEnhancedChatCapability(BaseCapability):
             base_url=config.base_url,
             temperature=0.7,
         )
-        await stream.thinking(reply, source="chat")
+        await stream.content(reply, source="chat")
         return reply
 
     # ── learn ───────────────────────────────────────────────────────
