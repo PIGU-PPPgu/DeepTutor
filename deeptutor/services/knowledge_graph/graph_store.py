@@ -21,10 +21,12 @@ def _graph_path(kb_name: str, root: Path | None = None) -> Path:
 
 
 def save_graph(graph: KnowledgeGraph, kb_name: str, root: Path | None = None) -> Path:
-    """Save graph to JSON file. Returns the path written."""
+    """Save graph to JSON file. Atomic write via temp + rename."""
     p = _graph_path(kb_name, root)
     _ensure_dir(p)
-    p.write_text(json.dumps(graph.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(graph.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.rename(p)  # atomic on POSIX
     return p
 
 
