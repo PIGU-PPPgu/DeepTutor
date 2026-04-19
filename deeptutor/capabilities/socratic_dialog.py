@@ -217,6 +217,7 @@ class SocraticDialogCapability(BaseCapability):
         history = self._format_history(context.conversation_history)
         knowledge = self._format_knowledge(context.knowledge_bases, context.metadata)
         student_response = context.user_message
+        current_turn = self._build_current_turn_context(history, student_response)
 
         # Allow caller to force a mode via metadata
         forced_mode = context.metadata.get("dialog_mode")
@@ -226,7 +227,7 @@ class SocraticDialogCapability(BaseCapability):
             await stream.observation("正在评估你的理解程度…", source=self.manifest.name, stage="assess")
             assess_result = await self._llm_json(
                 ASSESS_PROMPT.format(
-                    history=f"[学生最新输入] {student_response}\n\n{history}" if history == "（无历史对话）" else f"[学生最新输入] {student_response}\n\n{history}",
+                    history=current_turn,
                     knowledge=knowledge,
                 ),
                 fallback={
@@ -257,7 +258,7 @@ class SocraticDialogCapability(BaseCapability):
                     misconceptions=assess_result.get("misconceptions", []),
                     strengths=assess_result.get("strengths", []),
                     mode=dialog_mode,
-                    history=history,
+                    history=current_turn,
                 ),
                 fallback={
                     "mode": dialog_mode,
@@ -302,7 +303,7 @@ class SocraticDialogCapability(BaseCapability):
         async with stream.stage("reflect", source=self.manifest.name):
             reflect_result = await self._llm_json(
                 REFLECT_PROMPT.format(
-                    history=history,
+                    history=current_turn,
                     initial_assessment=str(assess_result),
                     dialog_goal=plan_result.get("goal", ""),
                 ),
@@ -342,6 +343,15 @@ class SocraticDialogCapability(BaseCapability):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_current_turn_context(history: str, student_response: str | None) -> str:
+        latest = (student_response or "").strip()
+        if history == "（无历史对话）":
+            return f"[学生最新输入] {latest}" if latest else history
+        if latest:
+            return f"[学生最新输入] {latest}\n\n{history}"
+        return history
 
     @staticmethod
     def _validate_mode(mode: str) -> str:
