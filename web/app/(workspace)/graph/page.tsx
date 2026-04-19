@@ -221,6 +221,29 @@ export default function GraphPage() {
           </div>
         )}
 
+        {/* 图例 */}
+        <div className="mb-4 pb-4 border-b border-[var(--border)]">
+          <div className="text-xs font-medium text-[var(--foreground)] mb-2">掌握度图例</div>
+          <div className="space-y-1 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#22c55e]" />
+              <span className="text-[var(--muted-foreground)]">已掌握 (≥80%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#eab308]" />
+              <span className="text-[var(--muted-foreground)]">学习中 (30-80%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#ef4444]" />
+              <span className="text-[var(--muted-foreground)]">薄弱 (&lt;30%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#94a3b8]" />
+              <span className="text-[var(--muted-foreground)]">未学习</span>
+            </div>
+          </div>
+        </div>
+
         <GraphStats stats={stats} weakNodes={weakNodes} />
       </div>
     </div>
