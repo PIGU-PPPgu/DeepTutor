@@ -66,6 +66,15 @@ SYSTEM_PROMPT = """\
 }
 """
 
+ANALYSIS_SYSTEM_PROMPT = """你是一位七年级数学教学分析助手。你的任务是分析学生理解、制定引导策略、复盘对话效果。
+
+要求：
+1. 允许直接做结构化分析，不要扮演苏格拉底老师提问
+2. 严格返回 JSON
+3. 结论要基于学生最新输入和历史对话
+4. 不要输出教学寒暄，不要反问用户
+"""
+
 # ---------------------------------------------------------------------------
 # Stage prompts
 # ---------------------------------------------------------------------------
@@ -370,11 +379,11 @@ class SocraticDialogCapability(BaseCapability):
             return f"可用知识库：{', '.join(knowledge_bases)}"
         return "（无特定知识参考）"
 
-    async def _llm_text(self, prompt: str) -> str:
+    async def _llm_text(self, prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
         config = get_llm_config()
         resp = await complete(
             prompt=prompt,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             api_key=config.api_key,
             base_url=config.base_url,
             model=config.model,
@@ -382,8 +391,14 @@ class SocraticDialogCapability(BaseCapability):
         )
         return resp.strip() if resp else ""
 
-    async def _llm_json(self, prompt: str, fallback: dict | None = None) -> dict:
-        raw = await self._llm_text(prompt)
+    async def _llm_json(
+        self,
+        prompt: str,
+        fallback: dict | None = None,
+        *,
+        system_prompt: str = ANALYSIS_SYSTEM_PROMPT,
+    ) -> dict:
+        raw = await self._llm_text(prompt, system_prompt=system_prompt)
         parsed = self._parse_json_safe(raw)
         if isinstance(parsed, dict):
             return parsed

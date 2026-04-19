@@ -138,10 +138,13 @@ async def generate_plan(kb_name: str) -> dict | None:
     if not graph:
         return None
 
-    weak_nodes = graph.get_weak_nodes(WEAK_THRESHOLD)
+    weak_nodes = [n for n in graph.get_weak_nodes(WEAK_THRESHOLD) if getattr(n, "mastery", None) is not None]
     if not weak_nodes:
-        # 如果没有 <0.3 的节点，取所有未掌握的节点（mastery < 1.0）
-        weak_nodes = [n for n in graph.nodes if n.mastery < 1.0]
+        # 如果没有 <0.3 的节点，取所有尚未完全掌握的有效节点
+        weak_nodes = [
+            n for n in graph.nodes
+            if getattr(n, "mastery", None) is not None and n.mastery < 1.0
+        ]
     if not weak_nodes:
         return {
             "kb_name": kb_name,
