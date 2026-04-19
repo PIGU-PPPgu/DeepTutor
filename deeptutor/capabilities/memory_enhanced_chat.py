@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any
@@ -44,7 +45,7 @@ MAX_SHORT_TERM_TURNS = 10
 def _init_memory(metadata: dict[str, Any]) -> dict[str, Any]:
     """Return existing memory from metadata or fresh empty structure."""
     if "memory" in metadata and isinstance(metadata["memory"], dict):
-        mem = metadata["memory"]
+        mem = copy.deepcopy(metadata["memory"])
         # ensure all keys exist (forward-compat)
         for layer, defaults in EMPTY_MEMORY.items():
             if layer not in mem:
@@ -86,7 +87,15 @@ class MemoryEnhancedChatCapability(BaseCapability):
 
         # ── Stage 4: store ──────────────────────────────────────────
         async with stream.stage("store", source=self.manifest.name):
-            context.metadata["memory"] = memory
+            stored_memory = json.loads(json.dumps(memory, ensure_ascii=False))
+            merged_metadata = dict(context.metadata)
+            merged_metadata["memory"] = stored_memory
+            result_payload = {
+                "reply": reply,
+                "memory": stored_memory,
+                "metadata": merged_metadata,
+            }
+            await stream.result(result_payload, source=self.manifest.name)
 
     # ── recall ──────────────────────────────────────────────────────
 

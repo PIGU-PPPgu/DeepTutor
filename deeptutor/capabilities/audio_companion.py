@@ -12,6 +12,7 @@ Stages: script → enhance → tts → assemble
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -121,6 +122,7 @@ class PodcastTask:
 
 # 全局任务存储
 _podcast_tasks: dict[str, PodcastTask] = {}
+_podcast_tasks_lock = asyncio.Lock()
 
 
 def get_podcast_task(task_id: str) -> Optional[PodcastTask]:
@@ -243,7 +245,8 @@ class AudioCompanionCapability(BaseCapability):
         """
         task_id = uuid.uuid4().hex[:12]
         task = PodcastTask(task_id=task_id, kb_name=kb_name, title=title)
-        _podcast_tasks[task_id] = task
+        async with _podcast_tasks_lock:
+            _podcast_tasks[task_id] = task
 
         # 在后台执行生成
         asyncio.create_task(
@@ -311,6 +314,18 @@ class AudioCompanionCapability(BaseCapability):
             task.status = "failed"
             task.error = str(e)
             logger.exception("Podcast generation failed for task %s", task.task_id)
+        finally:
+            if task.status in {"completed", "failed"}:
+                async with _podcast_tasks_lock:
+                    stale = [
+                        key for key, value in _podcast_tasks.items()
+                        if value.kb_name == task.kb_name and value.status in {"completed", "failed"}
+                    ]
+                    if len(stale) > 20:
+                        stale.sort(key=lambda key: _podcast_tasks[key].created_at)
+                        for key in stale[:-20]:
+                            with contextlib.suppress(KeyError):
+                                del _podcast_tasks[key]
 
     # ── 私有方法 ──
 
