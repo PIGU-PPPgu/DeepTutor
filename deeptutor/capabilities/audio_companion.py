@@ -72,7 +72,7 @@ SILICONFLOW_TTS_API_URL = "https://api.siliconflow.cn/v1/audio/speech"
 SILICONFLOW_TTS_MODEL = "siliconflow-tts-001"
 SILICONFLOW_API_KEY = os.environ.get(
     "SILICONFLOW_API_KEY",
-    "sk-hlunjehrrzxrtmedmccxvwfnjxkafamdowskycxruezpompr",
+    "",  # 必须通过环境变量设置
 )
 
 # 角色声音映射

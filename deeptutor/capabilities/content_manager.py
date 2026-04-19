@@ -199,7 +199,9 @@ class ContentManagerCapability(BaseCapability):
         title = processed["title"]
 
         # Write to knowledge base directory
-        kb_dir = Path(f"data/knowledge_bases/{kb_name}/raw")
+        # 安全校验：防止路径穿越
+        safe_name = Path(kb_name).name  # 去掉任何路径分隔符
+        kb_dir = Path(f"data/knowledge_bases/{safe_name}/raw")
         kb_dir.mkdir(parents=True, exist_ok=True)
 
         chunks = _chunk_text(text)
