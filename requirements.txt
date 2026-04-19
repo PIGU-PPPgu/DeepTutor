@@ -12,3 +12,4 @@
 # This file installs the server runtime (CLI + API + TutorBot).
 
 -r requirements/tutorbot.txt
+loguru>=0.7.0
