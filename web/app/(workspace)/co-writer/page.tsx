@@ -70,6 +70,7 @@ interface KnowledgeBase {
 const STORAGE_KEY = "intellitutor.co_writer.draft";
 const HISTORY_KEY = "intellitutor.co_writer.history";
 const SPLIT_RATIO_KEY = "intellitutor.co_writer.split_ratio";
+const SYNC_SCROLL_KEY = "intellitutor.co_writer.sync_scroll";
 
 const ACTION_LABELS: Record<EditAction, string> = {
   rewrite: "Rewrite",
