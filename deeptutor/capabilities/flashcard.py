@@ -92,9 +92,8 @@ class FlashcardCapability(BaseCapability):
             for i, card in enumerate(cards, 1):
                 card.setdefault("id", i)
 
-            await stream.thinking(
-                "cards_generated",
-                {"cards": cards, "count": len(cards)},
+            await stream.content(
+                f"生成了 {len(cards)} 张闪卡",
                 source=self.manifest.name,
             )
 
