@@ -17,8 +17,6 @@ import {
   Microscope,
   PenLine,
   Sparkles,
-  Share2,
-  Brain,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -28,14 +26,10 @@ import ChatComposer from "@/components/chat/home/ChatComposer";
 import { ChatMessageList } from "@/components/chat/home/ChatMessages";
 import { useUnifiedChat, type MessageRequestSnapshot } from "@/context/UnifiedChatContext";
 import type { StreamEvent } from "@/lib/unified-ws";
-import { fetchStats, type KGStats } from "@/components/knowledge-graph/graph-api";
 import { extractBase64FromDataUrl, readFileAsDataUrl } from "@/lib/file-attachments";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
-import { KnowledgeGraphPanel } from "@/components/chat/KnowledgeGraphPanel";
-import { MiniGraphCard } from "@/components/chat/MiniGraphCard";
-import { detectTopics } from "@/lib/topic-detector";
-import { fetchGraph, type KGGraph } from "@/components/knowledge-graph/graph-api";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
+import { KnowledgeGraphPanel } from "@/components/chat/KnowledgeGraphPanel";
 import {
   loadCapabilityPlaygroundConfigs,
   resolveCapabilityPlaygroundConfig,
@@ -131,7 +125,7 @@ const CAPABILITIES: CapabilityDef[] = [
     description: "Flexible conversation with any tool",
     icon: MessageSquare,
     allowedTools: ["brainstorm", "rag", "web_search", "code_execution", "reason", "paper_search"],
-    defaultTools: ["rag"],
+    defaultTools: [],
   },
   {
     value: "deep_solve",
@@ -172,22 +166,6 @@ const CAPABILITIES: CapabilityDef[] = [
     icon: BarChart3,
     allowedTools: [],
     defaultTools: [],
-  },
-  {
-    value: "knowledge_graph",
-    label: "Knowledge Graph",
-    description: "Build & query knowledge graphs with 7 relation types",
-    icon: Share2,
-    allowedTools: ["rag", "web_search"],
-    defaultTools: ["rag"],
-  },
-  {
-    value: "memory_enhanced_chat",
-    label: "Memory Chat",
-    description: "3-layer memory system: short/medium/long term",
-    icon: Brain,
-    allowedTools: ["rag", "web_search", "reason"],
-    defaultTools: ["rag"],
   },
 ];
 
@@ -251,8 +229,6 @@ export default function ChatPage() {
   // a fresh Chat / Deep Solve session has the shortest possible composer.
   const [panelCollapsed, setPanelCollapsed] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [graphData, setGraphData] = useState<KGGraph | null>(null);
-  const [graphStats, setGraphStats] = useState<KGStats | null>(null);
   const [showNotebookPicker, setShowNotebookPicker] = useState(false);
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
@@ -450,14 +426,6 @@ export default function ChatPage() {
       router.replace(`/chat/${state.sessionId}`, { scroll: false });
     }
   }, [state.sessionId, sessionIdParam, router]);
-
-  // Load graph data when KB changes
-  useEffect(() => {
-    const kb = state.knowledgeBases[0];
-    if (!kb) { setGraphData(null); setGraphStats(null); return; }
-    fetchGraph(kb).then(setGraphData).catch(() => setGraphData(null));
-    fetchStats(kb).then(setGraphStats).catch(() => setGraphStats(null));
-  }, [state.knowledgeBases[0]]);
 
   /* Load KBs */
   useEffect(() => {
@@ -731,8 +699,6 @@ export default function ChatPage() {
               onCopyAssistantMessage={copyAssistantMessage}
               onRetryMessage={handleRetryMessage}
               onConfirmOutline={handleConfirmOutline}
-              graphData={graphData}
-              kbName={state.knowledgeBases[0] || undefined}
             />
             <div ref={messagesEndRef} className="h-px w-full shrink-0" />
           </div>
@@ -803,14 +769,6 @@ export default function ChatPage() {
           onTogglePanelCollapsed={handleTogglePanelCollapsed}
         />
       </div>
-      </div>
-    </div>
-    <KnowledgeGraphPanel
-        kbName={state.knowledgeBases[0] || null}
-        onNodeClick={(nodeId, label) => {
-          sendMessage(`请帮我复习知识点: ${label}`, [], undefined, undefined, undefined);
-        }}
-      />
       <NotebookRecordPicker
         open={showNotebookPicker}
         onClose={handleCloseNotebookPicker}
@@ -827,6 +785,12 @@ export default function ChatPage() {
         messages={chatSaveMessages}
         onClose={handleCloseSaveModal}
       />
-    </>
+      <KnowledgeGraphPanel
+        kbName={state.knowledgeBases[0] || null}
+        onNodeClick={(nodeId, label) => {
+          sendMessage(`请帮我复习知识点: ${label}`);
+        }}
+      />
+    </div>
   );
 }
