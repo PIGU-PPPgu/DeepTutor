@@ -152,15 +152,11 @@ class ContentManagerCapability(BaseCapability):
                 text = source
                 title = source[:40]
         elif fmt == "pdf":
-            # Placeholder: in production use PyPDF2/pdfplumber
-            text = f"[PDF 文本提取占位符] 文件: {source}\n实际需 PyPDF2 或 pdfplumber 提取。"
-            title = Path(source).stem if not source.startswith("http") else "PDF Document"
+            text, title, author = self._extract_pdf(source)
         elif fmt == "epub":
-            text = f"[EPUB 文本提取占位符] 文件: {source}\n实际需 ebooklib 提取。"
-            title = Path(source).stem if not source.startswith("http") else "E-book"
+            text, title, author = self._extract_epub(source)
         elif fmt == "url":
-            text = f"[URL 内容提取指引] URL: {source}\n实际需爬虫工具（如 httpx + readability）提取正文。"
-            title = source
+            text, title = await self._extract_url(source)
         else:
             text = source
             title = "Unknown"
@@ -243,3 +239,98 @@ class ContentManagerCapability(BaseCapability):
             "ok": False,
             "message": "部分文件未成功写入",
         }
+
+    # ----- real extraction helpers -----
+
+    @staticmethod
+    def _extract_pdf(source: str) -> tuple[str, str, str]:
+        """从 PDF 文件中提取文本。支持本地路径。"""
+        import pdfplumber
+
+        path = Path(source)
+        if not path.exists():
+            return f"[PDF 文件不存在: {source}]", path.stem, ""
+
+        pages_text: list[str] = []
+        try:
+            with pdfplumber.open(str(path)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        pages_text.append(page_text)
+        except Exception as e:
+            return f"[PDF 提取失败: {e}]", path.stem, ""
+
+        text = "\n\n".join(pages_text)
+        return text, path.stem, ""
+
+    @staticmethod
+    def _extract_epub(source: str) -> tuple[str, str, str]:
+        """从 EPUB 文件中提取文本。"""
+        import ebooklib
+        from ebooklib import epub
+        from html.parser import HTMLParser
+
+        class _TextExtractor(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self._parts: list[str] = []
+            def handle_data(self, data: str) -> None:
+                self._parts.append(data)
+            def get_text(self) -> str:
+                return " ".join(self._parts)
+
+        path = Path(source)
+        if not path.exists():
+            return f"[EPUB 文件不存在: {source}]", path.stem, ""
+
+        try:
+            book = epub.read_epub(str(path))
+        except Exception as e:
+            return f"[EPUB 读取失败: {e}]", path.stem, ""
+
+        # 提取标题和作者
+        title = book.get_metadata("DC", "title")
+        title = title[0][0] if title else path.stem
+        author = book.get_metadata("DC", "author")
+        author = author[0][0] if author else ""
+
+        # 提取正文
+        chapters: list[str] = []
+        for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+            html_content = item.get_content().decode("utf-8", errors="ignore")
+            extractor = _TextExtractor()
+            extractor.feed(html_content)
+            chapter_text = extractor.get_text().strip()
+            if chapter_text:
+                chapters.append(chapter_text)
+
+        text = "\n\n".join(chapters)
+        return text, title, author
+
+    @staticmethod
+    async def _extract_url(source: str) -> tuple[str, str]:
+        """从 URL 提取网页正文。"""
+        import httpx
+        from readability import Document
+
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                resp = await client.get(source, headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; IntelliTutor/1.0)",
+                })
+                resp.raise_for_status()
+        except Exception as e:
+            return f"[URL 获取失败: {e}]", source
+
+        try:
+            doc = Document(resp.text)
+            title = doc.title()
+            # readability 提取正文 HTML，再简单去标签
+            import re
+            summary_html = doc.summary()
+            text = re.sub(r"<[^>]+>", " ", summary_html)
+            text = re.sub(r"\s+", " ", text).strip()
+            return text, title
+        except Exception as e:
+            return f"[URL 解析失败: {e}]", source
