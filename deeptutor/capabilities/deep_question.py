@@ -32,8 +32,14 @@ class DeepQuestionCapability(BaseCapability):
 
     async def run(self, context: UnifiedContext, stream: StreamBus) -> None:
         from deeptutor.agents.question.coordinator import AgentCoordinator
+        from deeptutor.capabilities._answer_now import extract_answer_now_context
         from deeptutor.services.llm.config import get_llm_config
         from deeptutor.services.path_service import get_path_service
+
+        answer_now_payload = extract_answer_now_context(context)
+        if answer_now_payload is not None:
+            await self._run_answer_now(context, stream, answer_now_payload)
+            return
 
         llm_config = get_llm_config()
         kb_name = context.knowledge_bases[0] if context.knowledge_bases else None

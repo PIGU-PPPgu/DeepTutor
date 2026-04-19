@@ -246,7 +246,10 @@ export default function ChatPage() {
     ...DEFAULT_VISUALIZE_CONFIG,
   });
   const [researchConfig, setResearchConfig] = useState<DeepResearchFormConfig>(createEmptyResearchConfig());
-  const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(true);
+  // Unified collapse state for the capability-specific config panel
+  // (Quiz / Math Animator / Visualize / Deep Research). Default collapsed so
+  // a fresh Chat / Deep Solve session has the shortest possible composer.
+  const [panelCollapsed, setPanelCollapsed] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [graphData, setGraphData] = useState<KGGraph | null>(null);
   const [graphStats, setGraphStats] = useState<KGStats | null>(null);
@@ -307,38 +310,36 @@ export default function ChatPage() {
     () => selectedHistorySessions.map((session) => session.sessionId),
     [selectedHistorySessions],
   );
+  const chatSaveMessages = useMemo(
+    () =>
+      state.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        capability: msg.capability,
+      })),
+    [state.messages],
+  );
   const chatSavePayload = useMemo(() => {
     if (!state.messages.length) return null;
     const title =
       state.messages.find((msg) => msg.role === "user")?.content.trim().slice(0, 80) || "Chat Session";
-    const transcript = state.messages
-      .map((msg) => {
-        const role = msg.role === "user" ? "User" : msg.role === "assistant" ? "Assistant" : "System";
-        return `## ${role}\n${msg.content}`;
-      })
-      .join("\n\n");
     return {
       recordType: "chat" as const,
       title,
-      userQuery: state.messages.filter((msg) => msg.role === "user").map((msg) => msg.content).join("\n\n"),
-      output: transcript,
+      // The actual transcript / userQuery are rebuilt inside SaveToNotebookModal
+      // from the user's selected subset of messages. We still provide a
+      // sensible fallback for non-selection callers.
+      userQuery: "",
+      output: "",
       metadata: {
         source: "chat",
         capability: state.activeCapability || "chat",
-        message_count: state.messages.length,
         ui_language: state.language,
         session_id: state.sessionId,
+        total_message_count: state.messages.length,
       },
     };
   }, [state.activeCapability, state.language, state.messages, state.sessionId]);
-  const activeAssistantMessage = state.isStreaming ? state.messages[state.messages.length - 1] : null;
-  const activeUserIndex = useMemo(() => {
-    if (!state.isStreaming) return -1;
-    for (let index = state.messages.length - 2; index >= 0; index -= 1) {
-      if (state.messages[index]?.role === "user") return index;
-    }
-    return -1;
-  }, [state.isStreaming, state.messages]);
   const lastMessage = state.messages[state.messages.length - 1];
   const {
     containerRef: messagesContainerRef,
@@ -375,15 +376,40 @@ export default function ChatPage() {
     (snapshot?: MessageRequestSnapshot, assistantMsg?: { content: string; events?: StreamEvent[] }) => {
       if (!snapshot || !state.isStreaming) return;
       const answerNowEvents = (assistantMsg?.events ?? []).map((event) => ({
-        type: event.type, stage: event.stage, content: event.content, metadata: event.metadata ?? {},
+        type: event.type,
+        stage: event.stage,
+        content: event.content,
+        metadata: event.metadata ?? {},
       }));
       cancelStreamingTurn();
+      // Preserve the original capability — each capability now owns its
+      // own answer-now fast-path (deep_solve jumps to writing,
+      // deep_question to direct quiz synthesis, math_animator to
+      // code-gen + render, etc.). The backend orchestrator only falls
+      // back to ``chat`` if the requested capability is missing.
+      const answerNowSnapshot: MessageRequestSnapshot = {
+        ...snapshot,
+        config: {
+          ...(snapshot.config || {}),
+          answer_now_context: {
+            original_user_message: snapshot.content,
+            partial_response: assistantMsg?.content || "",
+            events: answerNowEvents,
+          },
+        },
+      };
       window.setTimeout(() => {
         sendMessage(
-          snapshot.content, snapshot.attachments,
-          { ...(snapshot.config || {}), answer_now_context: { original_user_message: snapshot.content, partial_response: assistantMsg?.content || "", events: answerNowEvents } },
-          snapshot.notebookReferences, snapshot.historyReferences,
-          { displayUserMessage: false, persistUserMessage: false, requestSnapshotOverride: snapshot },
+          answerNowSnapshot.content,
+          answerNowSnapshot.attachments,
+          answerNowSnapshot.config,
+          answerNowSnapshot.notebookReferences,
+          answerNowSnapshot.historyReferences,
+          {
+            displayUserMessage: false,
+            persistUserMessage: false,
+            requestSnapshotOverride: answerNowSnapshot,
+          },
         );
         shouldAutoScrollRef.current = true;
       }, 0);
@@ -496,7 +522,10 @@ export default function ChatPage() {
           : [...cap.defaultTools],
       );
       if (config.enabledTools.includes("rag") && config.knowledgeBase) setKBs([config.knowledgeBase]);
-      setResearchPanelCollapsed(cap.value !== "deep_research");
+      // Default-expand the per-capability settings panel right after a
+      // capability switch so users immediately see the form. Sending a
+      // message later will auto-collapse it (see handleSend).
+      setPanelCollapsed(false);
       setCapMenuOpen(false);
     },
     [capabilityConfigs, setCapability, setKBs, setTools],
@@ -596,7 +625,9 @@ export default function ChatPage() {
       extraAttachments, config, notebookReferencesPayload, historyReferencesPayload,
     );
     shouldAutoScrollRef.current = true;
-    if (isResearchMode) setResearchPanelCollapsed(true);
+    // Auto-collapse the per-capability settings panel after sending so the
+    // composer stays compact during conversation.
+    setPanelCollapsed(true);
     setAttachments([]);
     setSelectedNotebookRecords([]);
     setSelectedHistorySessions([]);
@@ -627,7 +658,7 @@ export default function ChatPage() {
   const handleRemoveNotebook = useCallback((notebookId: string) => {
     setSelectedNotebookRecords((prev) => prev.filter((record) => record.notebookId !== notebookId));
   }, []);
-  const handleToggleResearchCollapsed = useCallback(() => { setResearchPanelCollapsed((prev) => !prev); }, []);
+  const handleTogglePanelCollapsed = useCallback(() => { setPanelCollapsed((prev) => !prev); }, []);
   const handleCloseNotebookPicker = useCallback(() => { setShowNotebookPicker(false); }, []);
   const handleApplyNotebookRecords = useCallback((records: SelectedRecord[]) => { setSelectedNotebookRecords(records); }, []);
   const handleCloseHistoryPicker = useCallback(() => { setShowHistoryPicker(false); }, []);
@@ -639,23 +670,25 @@ export default function ChatPage() {
   }, [router]);
 
   return (
-    <>
-    <div className="flex h-full overflow-hidden bg-[var(--background)]">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mastery progress bar */}
-        {graphStats && state.knowledgeBases[0] && (
-          <div className="px-6 pt-2 group relative">
-            <div className="h-1 bg-[var(--secondary)] rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-500 via-yellow-500 to-red-500"
-                style={{ width: `${graphStats.mastery_avg * 100}%` }}
-              />
-            </div>
-            <div className="absolute top-6 left-6 hidden group-hover:block z-10 bg-[var(--card)] border border-[var(--border)] rounded-lg p-2 text-[10px] text-[var(--muted-foreground)] shadow-lg whitespace-nowrap">
-              <div>已掌握: {graphStats.mastered} · 学习中: {graphStats.learning} · 薄弱: {graphStats.weak} · 未学习: {graphStats.unstudied}</div>
-            </div>
-          </div>
-        )}
+    <div className="flex h-full flex-col overflow-hidden bg-[var(--background)]">
+      <div className="mx-auto flex w-full max-w-[960px] items-center justify-between px-6 pt-3 pb-0">
+        <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--foreground)]">{t(activeCap.label)}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSaveModal(true)}
+            disabled={!chatSavePayload}
+            className="rounded-lg border border-[var(--border)]/50 px-3 py-1.5 text-[12px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--border)]/50 disabled:hover:text-[var(--muted-foreground)]"
+          >
+            {t("Save to Notebook")}
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="rounded-lg border border-[var(--border)]/50 px-3 py-1.5 text-[12px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
+          >
+            {t("New chat")}
+          </button>
+        </div>
+      </div>
       <div className="mx-auto flex w-full max-w-[960px] flex-1 min-h-0 flex-col overflow-hidden px-6">
 
         {!hasMessages ? (
@@ -674,37 +707,26 @@ export default function ChatPage() {
             ref={messagesContainerRef}
             data-chat-scroll-root="true"
             onScroll={handleMessagesScroll}
-            className={`mx-auto w-full flex-1 min-h-0 space-y-7 overflow-y-auto pt-6 pr-4 [scrollbar-gutter:stable] ${hasMessages ? "" : "pb-6"}`}
-            style={hasMessages ? { paddingBottom: `${Math.max(composerHeight + 24, 120)}px` } : undefined}
+            className={`mx-auto w-full flex-1 min-h-0 space-y-7 overflow-y-auto pr-4 [scrollbar-gutter:stable] ${hasMessages ? "pt-0" : "pt-2 pb-6"}`}
+            style={
+              hasMessages
+                ? (() => {
+                    const maskImage =
+                      "linear-gradient(to bottom, transparent 0px, #000 32px, #000 calc(100% - 40px), transparent 100%)";
+                    return {
+                      paddingBottom: "4px",
+                      WebkitMaskImage: maskImage,
+                      maskImage,
+                    };
+                  })()
+                : undefined
+            }
           >
-            <div className="flex items-center justify-between pb-2">
-              <span className="text-[13px] font-medium text-[var(--muted-foreground)]">{t(activeCap.label)}</span>
-              <div className="flex items-center gap-2">
-                {chatSavePayload && (
-                  <button
-                    onClick={() => setShowSaveModal(true)}
-                    className="rounded-lg border border-[var(--border)]/50 px-3 py-1.5 text-[12px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
-                  >
-                    {t("Save to Notebook")}
-                  </button>
-                )}
-                <button
-                  onClick={handleNewChat}
-                  className="rounded-lg border border-[var(--border)]/50 px-3 py-1.5 text-[12px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
-                >
-                  {t("New chat")}
-                </button>
-              </div>
-            </div>
-
             <ChatMessageList
               messages={state.messages}
               isStreaming={state.isStreaming}
-              activeUserIndex={activeUserIndex}
-              activeAssistantMessage={activeAssistantMessage?.role === "assistant" ? activeAssistantMessage : null}
               sessionId={state.sessionId}
               language={state.language}
-              onCancelStreaming={cancelStreamingTurn}
               onAnswerNow={handleAnswerNow}
               onCopyAssistantMessage={copyAssistantMessage}
               onRetryMessage={handleRetryMessage}
@@ -751,7 +773,7 @@ export default function ChatPage() {
           visualizeConfig={visualizeConfig}
           researchConfig={researchConfig}
           researchValidationErrors={researchValidation.errors}
-          researchPanelCollapsed={researchPanelCollapsed}
+          panelCollapsed={panelCollapsed}
           capabilities={CAPABILITIES}
           researchSources={RESEARCH_SOURCES}
           onSetCapMenuOpen={setCapMenuOpen}
@@ -772,12 +794,13 @@ export default function ChatPage() {
           onDrop={handleDrop}
           onPaste={handlePaste}
           onSelectCapability={handleSelectCapability}
+          onCancelStreaming={cancelStreamingTurn}
           onChangeQuizConfig={setQuizConfig}
           onUploadQuizPdf={setQuizPdf}
           onChangeMathAnimatorConfig={setMathAnimatorConfig}
           onChangeVisualizeConfig={setVisualizeConfig}
           onChangeResearchConfig={setResearchConfig}
-          onToggleResearchCollapsed={handleToggleResearchCollapsed}
+          onTogglePanelCollapsed={handleTogglePanelCollapsed}
         />
       </div>
       </div>
@@ -801,6 +824,7 @@ export default function ChatPage() {
       <SaveToNotebookModal
         open={showSaveModal}
         payload={chatSavePayload}
+        messages={chatSaveMessages}
         onClose={handleCloseSaveModal}
       />
     </>
