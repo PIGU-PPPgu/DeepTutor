@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { InteractiveGraph } from "@/components/knowledge-graph/InteractiveGraph";
 import { GraphStats } from "@/components/knowledge-graph/GraphStats";
 import { GraphTree } from "@/components/knowledge-graph/GraphTree";
@@ -16,6 +16,37 @@ import {
   type KGStats,
 } from "@/components/knowledge-graph/graph-api";
 
+function masteryBadge(mastery: number) {
+  if (mastery >= 0.8) return { label: "已掌握", color: "#22c55e" };
+  if (mastery >= 0.3) return { label: "学习中", color: "#eab308" };
+  if (mastery > 0) return { label: "薄弱", color: "#ef4444" };
+  return { label: "未学习", color: "#94a3b8" };
+}
+
+function filterGraph(graph: KGGraph | null, search: string, masteryFilter: string): KGGraph | null {
+  if (!graph) return null;
+
+  const query = search.trim().toLowerCase();
+  const nodes = graph.nodes.filter((node) => {
+    const matchSearch = !query
+      || node.label.toLowerCase().includes(query)
+      || node.description?.toLowerCase().includes(query)
+      || String(node.source || "").toLowerCase().includes(query);
+
+    const matchMastery = masteryFilter === "all"
+      || (masteryFilter === "weak" && node.mastery > 0 && node.mastery < 0.3)
+      || (masteryFilter === "learning" && node.mastery >= 0.3 && node.mastery < 0.8)
+      || (masteryFilter === "mastered" && node.mastery >= 0.8)
+      || (masteryFilter === "unstudied" && node.mastery <= 0);
+
+    return matchSearch && matchMastery;
+  });
+
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges = graph.edges.filter((e) => nodeIds.has(e.source_id) && nodeIds.has(e.target_id));
+  return { nodes, edges };
+}
+
 export default function GraphPage() {
   const [graphs, setGraphs] = useState<string[]>([]);
   const [selectedKb, setSelectedKb] = useState("");
@@ -27,6 +58,7 @@ export default function GraphPage() {
   const [error, setError] = useState("");
   const [treeSearch, setTreeSearch] = useState("");
   const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
+  const [masteryFilter, setMasteryFilter] = useState<"all" | "weak" | "learning" | "mastered" | "unstudied">("all");
 
   useEffect(() => {
     listGraphs().then((r) => setGraphs(r.graphs)).catch(() => {});
@@ -46,6 +78,7 @@ export default function GraphPage() {
       setStats(s);
       setWeakNodes(w);
       setSelectedNode(null);
+      setHighlightNodeId(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
@@ -79,7 +112,6 @@ export default function GraphPage() {
 
   const handleGenerate = async () => {
     if (!selectedKb) return;
-    // For now, prompt user for content. In future, pull from knowledge base content.
     const content = prompt("粘贴教学内容以生成知识图谱：");
     if (!content) return;
     setLoading(true);
@@ -92,6 +124,8 @@ export default function GraphPage() {
       ]);
       setStats(s);
       setWeakNodes(w);
+      setSelectedNode(null);
+      setHighlightNodeId(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "生成失败");
     } finally {
@@ -99,9 +133,12 @@ export default function GraphPage() {
     }
   };
 
+  const visibleGraph = useMemo(() => filterGraph(graph, treeSearch, masteryFilter), [graph, treeSearch, masteryFilter]);
+  const selectedBadge = selectedNode ? masteryBadge(selectedNode.mastery) : null;
+  const metadataEntries = selectedNode ? Object.entries(selectedNode.metadata || {}).slice(0, 8) : [];
+
   return (
     <div className="flex h-full">
-      {/* Left: Tree navigation */}
       {graph && (
         <GraphTree
           nodes={graph.nodes}
@@ -117,10 +154,8 @@ export default function GraphPage() {
         />
       )}
 
-      {/* Main graph area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--border)] bg-[var(--card)]">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-[var(--border)] bg-[var(--card)]">
           <select
             value={selectedKb}
             onChange={(e) => {
@@ -163,19 +198,66 @@ export default function GraphPage() {
               刷新
             </button>
           )}
+
+          <select
+            value={masteryFilter}
+            onChange={(e) => setMasteryFilter(e.target.value as typeof masteryFilter)}
+            className="bg-[var(--secondary)] text-[var(--foreground)] rounded px-2 py-1.5 text-sm border border-[var(--border)]"
+          >
+            <option value="all">全部掌握度</option>
+            <option value="weak">只看薄弱</option>
+            <option value="learning">只看学习中</option>
+            <option value="mastered">只看已掌握</option>
+            <option value="unstudied">只看未学习</option>
+          </select>
+
+          {weakNodes.length > 0 && (
+            <button
+              onClick={() => {
+                const weakest = [...weakNodes].sort((a, b) => a.mastery - b.mastery)[0];
+                setHighlightNodeId(weakest.id);
+                setSelectedNode(weakest);
+                setTreeSearch(weakest.label);
+              }}
+              className="px-3 py-1.5 text-sm rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
+            >
+              定位最薄弱节点
+            </button>
+          )}
+
+          {(treeSearch || masteryFilter !== "all") && (
+            <button
+              onClick={() => {
+                setTreeSearch("");
+                setMasteryFilter("all");
+              }}
+              className="px-3 py-1.5 text-sm rounded border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              清空筛选
+            </button>
+          )}
+
+          {visibleGraph && (
+            <div className="ml-auto text-xs text-[var(--muted-foreground)]">
+              当前显示 {visibleGraph.nodes.length}/{graph?.nodes.length ?? 0} 节点
+            </div>
+          )}
         </div>
 
         {error && (
           <div className="px-4 py-2 text-sm text-red-400 bg-red-500/10">{error}</div>
         )}
 
-        {/* Graph */}
         <div className="flex-1 relative">
-          {graph ? (
+          {visibleGraph ? (
             <InteractiveGraph
-              graph={graph}
+              graph={visibleGraph}
               kbName={selectedKb}
-              onNodeClick={setSelectedNode}
+              highlightedNodeId={highlightNodeId}
+              onNodeClick={(node) => {
+                setSelectedNode(node);
+                setHighlightNodeId(node.id);
+              }}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-[var(--muted-foreground)]">
@@ -188,40 +270,42 @@ export default function GraphPage() {
         </div>
       </div>
 
-      {/* Side panel */}
-      <div className="w-[280px] shrink-0 border-l border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4">
-        {/* Node detail */}
-        {selectedNode && (
-          <div className="mb-4 pb-4 border-b border-[var(--border)]">
-            <div className="text-sm font-medium text-[var(--foreground)] mb-1">{selectedNode.label}</div>
-            <div className="text-xs text-[var(--muted-foreground)] mb-2">
-              {selectedNode.description || "无描述"}
+      <div className="w-[320px] shrink-0 border-l border-[var(--border)] bg-[var(--card)] overflow-y-auto p-4">
+        {selectedNode && selectedBadge && (
+          <div className="mb-4 pb-4 border-b border-[var(--border)] space-y-3">
+            <div>
+              <div className="text-sm font-medium text-[var(--foreground)] mb-1">{selectedNode.label}</div>
+              <div className="text-xs text-[var(--muted-foreground)]">{selectedNode.description || "无描述"}</div>
             </div>
+
             <div className="flex items-center gap-2 text-xs">
-              <span
-                className="w-3 h-3 rounded-full"
-                style={{
-                  background:
-                    selectedNode.mastery >= 0.8
-                      ? "#22c55e"
-                      : selectedNode.mastery >= 0.3
-                        ? "#eab308"
-                        : selectedNode.mastery > 0
-                          ? "#ef4444"
-                          : "#94a3b8",
-                }}
-              />
+              <span className="w-3 h-3 rounded-full" style={{ background: selectedBadge.color }} />
               <span className="text-[var(--muted-foreground)]">
-                掌握度: {(selectedNode.mastery * 100).toFixed(0)}%
+                {selectedBadge.label} · {(selectedNode.mastery * 100).toFixed(0)}%
               </span>
             </div>
-            <div className="text-xs text-[var(--muted-foreground)] mt-1">
-              层级: {["学科", "章节", "知识点", "考点"][selectedNode.level] || selectedNode.level}
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-[var(--muted-foreground)]">
+              <div>层级：{["学科", "章节", "知识点", "考点"][selectedNode.level] || selectedNode.level}</div>
+              <div>来源：{selectedNode.source || "未知"}</div>
             </div>
+
+            {metadataEntries.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-[var(--foreground)] mb-2">元数据</div>
+                <div className="space-y-1.5">
+                  {metadataEntries.map(([key, value]) => (
+                    <div key={key} className="text-xs text-[var(--muted-foreground)] break-all">
+                      <span className="text-[var(--foreground)]">{key}：</span>
+                      {typeof value === "string" ? value : JSON.stringify(value)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* 图例 */}
         <div className="mb-4 pb-4 border-b border-[var(--border)]">
           <div className="text-xs font-medium text-[var(--foreground)] mb-2">掌握度图例</div>
           <div className="space-y-1 text-xs">

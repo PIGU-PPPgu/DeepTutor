@@ -93,6 +93,7 @@ function TreeRow({
   expandedIds,
   toggleExpand,
   visibleIds,
+  searchQuery,
 }: {
   treeNode: TreeNode;
   depth: number;
@@ -101,6 +102,7 @@ function TreeRow({
   expandedIds: Set<string>;
   toggleExpand: (id: string) => void;
   visibleIds: Set<string>;
+  searchQuery: string;
 }) {
   const { node, children } = treeNode;
   const isSelected = selectedNodeId === node.id;
@@ -113,6 +115,11 @@ function TreeRow({
   // Only show children that are visible
   const visibleChildren = children.filter((c) => visibleIds.has(c.node.id));
   const showChildren = hasChildren && isExpanded && visibleChildren.length > 0;
+  const query = searchQuery.trim().toLowerCase();
+  const isMatch = !!query && (
+    node.label.toLowerCase().includes(query)
+    || node.description?.toLowerCase().includes(query)
+  );
 
   return (
     <>
@@ -155,7 +162,7 @@ function TreeRow({
         />
 
         {/* Label */}
-        <span className="text-sm text-white truncate flex-1">{node.label}</span>
+        <span className={`text-sm truncate flex-1 ${isMatch ? "text-amber-300 font-medium" : "text-white"}`}>{node.label}</span>
 
         {/* Child count */}
         {hasChildren && childCount > 0 && (
@@ -184,6 +191,7 @@ function TreeRow({
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               visibleIds={visibleIds}
+              searchQuery={searchQuery}
             />
           ))}
       </div>
@@ -219,7 +227,13 @@ export function GraphTree({
     return expanded;
   }, [searchQuery, tree, visibleIds]);
 
-  const [manualExpanded, setManualExpanded] = useState<Set<string>>(new Set());
+  const [manualExpanded, setManualExpanded] = useState<Set<string>>(() => {
+    const rootish = new Set<string>();
+    for (const n of nodes) {
+      if (!n.parent_id || n.level <= 1) rootish.add(n.id);
+    }
+    return rootish;
+  });
 
   const expandedIds = useMemo(() => {
     if (searchQuery.trim()) return autoExpandedIds;
@@ -265,14 +279,16 @@ export function GraphTree({
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               visibleIds={visibleIds}
+              searchQuery={searchQuery}
             />
           ))
         )}
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)]">
-        共 {nodes.length} 个节点
+      <div className="px-3 py-2 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)] flex items-center justify-between gap-2">
+        <span>共 {nodes.length} 个节点</span>
+        {!!searchQuery.trim() && <span>命中 {visibleIds.size} 个</span>}
       </div>
     </div>
   );

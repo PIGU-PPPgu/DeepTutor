@@ -44,10 +44,11 @@ function groupColor(group: string): string {
 interface Props {
   graph: KGGraph;
   kbName: string;
+  highlightedNodeId?: string | null;
   onNodeClick?: (node: KGNode) => void;
 }
 
-export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
+export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNodeClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [stats, setStats] = useState<KGStats | null>(null);
 
@@ -132,6 +133,7 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
       .selectAll<SVGGElement, SimNode>("g")
       .data(nodes)
       .join("g")
+      .style("opacity", (d) => (highlightedNodeId && d.id !== highlightedNodeId ? 0.35 : 1))
       .call(
         d3.drag<SVGGElement, SimNode>()
           .on("start", (event, d) => {
@@ -179,8 +181,8 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
       node.append("circle")
         .attr("r", (d) => nodeRadius(d.level))
         .attr("fill", (d) => nodeColor(d.mastery))
-        .attr("stroke", "#1e293b")
-        .attr("stroke-width", 1.5)
+        .attr("stroke", (d) => (d.id === highlightedNodeId ? "#f8fafc" : "#1e293b"))
+        .attr("stroke-width", (d) => (d.id === highlightedNodeId ? 3 : 1.5))
         .style("cursor", "pointer");
     }
 
@@ -216,7 +218,8 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
         return nodeRadius(d.level) + 14;
       })
       .attr("text-anchor", "middle")
-      .attr("fill", "#f8fafc")
+      .attr("fill", (d) => (d.id === highlightedNodeId ? "#ffffff" : "#f8fafc"))
+      .attr("font-weight", (d) => (d.id === highlightedNodeId ? 700 : 400))
       .attr("font-size", (d) => (d.level === 0 ? 12 : 10))
       .style("pointer-events", "none");
 
@@ -224,6 +227,17 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
       const orig = graph.nodes.find((n) => n.id === d.id);
       if (orig && onNodeClick) onNodeClick(orig);
     });
+
+    if (highlightedNodeId) {
+      const target = nodes.find((n) => n.id === highlightedNodeId);
+      if (target?.x != null && target?.y != null) {
+        const transform = d3.zoomIdentity
+          .translate(width / 2, height / 2)
+          .scale(1.35)
+          .translate(-target.x, -target.y);
+        svg.transition().duration(350).call(zoom.transform, transform);
+      }
+    }
 
     simulation.on("tick", () => {
       link
@@ -242,7 +256,7 @@ export function InteractiveGraph({ graph, kbName, onNodeClick }: Props) {
     return () => {
       simulation.stop();
     };
-  }, [graph, onNodeClick]);
+  }, [graph, highlightedNodeId, onNodeClick]);
 
   useEffect(() => {
     const cleanup = render();
