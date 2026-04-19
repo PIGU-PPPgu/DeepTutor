@@ -47,6 +47,18 @@ function filterGraph(graph: KGGraph | null, search: string, masteryFilter: strin
   return { nodes, edges };
 }
 
+/** Build ancestor path for a node, from root to the node itself */
+function buildBreadcrumb(nodes: KGNode[], nodeId: string): KGNode[] {
+  const map = new Map(nodes.map((n) => [n.id, n]));
+  const path: KGNode[] = [];
+  let current: KGNode | undefined = map.get(nodeId);
+  while (current) {
+    path.unshift(current);
+    current = current.parent_id ? map.get(current.parent_id) : undefined;
+  }
+  return path;
+}
+
 export default function GraphPage() {
   const [graphs, setGraphs] = useState<string[]>([]);
   const [selectedKb, setSelectedKb] = useState("");
@@ -136,6 +148,12 @@ export default function GraphPage() {
   const visibleGraph = useMemo(() => filterGraph(graph, treeSearch, masteryFilter), [graph, treeSearch, masteryFilter]);
   const selectedBadge = selectedNode ? masteryBadge(selectedNode.mastery) : null;
   const metadataEntries = selectedNode ? Object.entries(selectedNode.metadata || {}).slice(0, 8) : [];
+
+  // Breadcrumb path for selected node
+  const breadcrumb = useMemo(() => {
+    if (!selectedNode || !graph) return [];
+    return buildBreadcrumb(graph.nodes, selectedNode.id);
+  }, [selectedNode, graph]);
 
   return (
     <div className="flex h-full">
@@ -244,6 +262,34 @@ export default function GraphPage() {
           )}
         </div>
 
+        {/* Breadcrumb */}
+        {breadcrumb.length > 0 && (
+          <div className="flex items-center gap-1 px-4 py-1.5 border-b border-[var(--border)] bg-[var(--card)]/50 text-xs overflow-x-auto min-h-[32px]">
+            {breadcrumb.map((crumb, i) => (
+              <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+                {i > 0 && (
+                  <svg className="text-[var(--muted-foreground)]" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                    <path d="M3 1l5 4-5 4z" />
+                  </svg>
+                )}
+                <button
+                  onClick={() => {
+                    setHighlightNodeId(crumb.id);
+                    setSelectedNode(crumb);
+                  }}
+                  className={`px-1.5 py-0.5 rounded transition-colors ${
+                    crumb.id === selectedNode?.id
+                      ? "text-[var(--foreground)] font-medium"
+                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5"
+                  }`}
+                >
+                  {crumb.label}
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {error && (
           <div className="px-4 py-2 text-sm text-red-400 bg-red-500/10">{error}</div>
         )}
@@ -326,6 +372,7 @@ export default function GraphPage() {
               <span className="text-[var(--muted-foreground)]">未学习</span>
             </div>
           </div>
+          <div className="mt-2 text-[10px] text-[var(--muted-foreground)]/60">双击节点可聚焦邻域</div>
         </div>
 
         <GraphStats stats={stats} weakNodes={weakNodes} />

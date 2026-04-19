@@ -30,8 +30,11 @@ function nodeColor(mastery: number): string {
   return "#94a3b8";
 }
 
-function nodeRadius(level: number): number {
-  return [28, 20, 14, 10][level] ?? 10;
+function nodeRadius(level: number, connectionCount = 0): number {
+  const base = [28, 20, 14, 10][level] ?? 10;
+  // Scale up by connection count: +1px per 3 connections, max +8
+  const bonus = Math.min(8, Math.floor(connectionCount / 3));
+  return base + bonus;
 }
 
 function groupColor(group: string): string {
@@ -50,11 +53,59 @@ interface Props {
 
 export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNodeClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const minimapSvgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState<KGStats | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     fetchStats(kbName).then(setStats).catch(() => {});
   }, [kbName, graph]);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  const exportPng = useCallback(() => {
+    if (!svgRef.current) return;
+    const svgEl = svgRef.current;
+    const w = svgEl.clientWidth;
+    const h = svgEl.clientHeight;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement("canvas");
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    const blob = new Blob(
+      [`<?xml version="1.0" encoding="UTF-8"?>`, svgData],
+      { type: "image/svg+xml;charset=utf-8" }
+    );
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const a = document.createElement("a");
+      a.download = `knowledge-graph-${kbName || "export"}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    };
+    img.src = url;
+  }, [kbName]);
 
   const render = useCallback(() => {
     if (!svgRef.current || graph.nodes.length === 0) return;
@@ -68,15 +119,32 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
     // Container with zoom
     const g = svg.append("g");
 
+    // Minimap update function (closure over nodes/links/width/height)
+    // Will be filled in after node/link data is ready
+    let updateMinimap = (_transform?: d3.ZoomTransform) => {};
+
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
-      .on("zoom", (event) => g.attr("transform", event.transform));
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+        updateMinimap(event.transform);
+      });
     svg.call(zoom);
+
+    // Disable default dblclick zoom so we can handle it ourselves
+    svg.on("dblclick.zoom", null);
 
     // Detect literature graph mode
     const isLiterature = graph.nodes.some(
       (n) => (n as any).metadata?.graph_type === "literature"
     );
+
+    // Count connections per node
+    const connCount = new Map<string, number>();
+    for (const e of graph.edges) {
+      connCount.set(e.source_id, (connCount.get(e.source_id) || 0) + 1);
+      connCount.set(e.target_id, (connCount.get(e.target_id) || 0) + 1);
+    }
 
     // Build simulation data
     const nodeMap = new Map<string, SimNode>();
@@ -104,7 +172,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       .force("link", d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(80))
       .force("charge", d3.forceManyBody().strength(-200))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<SimNode>().radius((d) => nodeRadius(d.level) + 4));
+      .force("collision", d3.forceCollide<SimNode>().radius((d) => nodeRadius(d.level, connCount.get(d.id)) + 4));
 
     // Links
     const link = g.append("g")
@@ -113,7 +181,36 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       .join("line")
       .attr("stroke", "#475569")
       .attr("stroke-opacity", 0.4)
-      .attr("stroke-width", (d) => Math.max(1, d.weight * 2));
+      .attr("stroke-width", (d) => Math.max(1, d.weight * 2))
+      .style("cursor", "pointer");
+
+    // Edge hover tooltip (positioned relative to SVG element)
+    const edgeTooltip = svg.append("g").style("display", "none").style("pointer-events", "none");
+    const edgeTooltipBg = edgeTooltip.append("rect").attr("rx", 4).attr("fill", "#0f172a").attr("stroke", "#475569").attr("stroke-width", 1).attr("opacity", 0.9);
+    const edgeTooltipText = edgeTooltip.append("text").attr("fill", "#94a3b8").attr("font-size", 11).attr("dy", "1em");
+
+    link.on("mouseenter", function (event: MouseEvent, d) {
+      if (!d.relation) return;
+      d3.select(this).attr("stroke", "#94a3b8").attr("stroke-opacity", 0.9).attr("stroke-width", (d as SimLink).weight * 2 + 1);
+      edgeTooltipText.text(d.relation);
+      const bbox = edgeTooltipText.node()?.getBBox();
+      if (!bbox) return;
+      const padX = 8, padY = 5;
+      edgeTooltipBg.attr("width", bbox.width + padX * 2).attr("height", bbox.height + padY * 2);
+      edgeTooltipText.attr("x", padX).attr("y", padY);
+      const svgRect = svgRef.current!.getBoundingClientRect();
+      edgeTooltip.attr("transform", `translate(${event.clientX - svgRect.left + 10},${event.clientY - svgRect.top - 28})`);
+      edgeTooltip.style("display", null);
+    }).on("mousemove", function (event: MouseEvent) {
+      const svgRect = svgRef.current!.getBoundingClientRect();
+      edgeTooltip.attr("transform", `translate(${event.clientX - svgRect.left + 10},${event.clientY - svgRect.top - 28})`);
+    }).on("mouseleave", function () {
+      d3.select(this)
+        .attr("stroke", "#475569")
+        .attr("stroke-opacity", 0.4)
+        .attr("stroke-width", (d) => Math.max(1, (d as SimLink).weight * 2));
+      edgeTooltip.style("display", "none");
+    });
 
     // Link labels for literature graphs
     const linkLabel = isLiterature
@@ -152,6 +249,15 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           }),
       );
 
+    // Pulse ring for selected/highlighted node
+    node.filter((d) => d.id === highlightedNodeId)
+      .append("circle")
+      .attr("class", "pulse-ring")
+      .attr("r", (d) => nodeRadius(d.level, connCount.get(d.id)) + 8)
+      .attr("fill", "none")
+      .attr("stroke", "#3b82f6")
+      .attr("stroke-width", 2);
+
     // Shape by literature type
     if (isLiterature) {
       node.each(function (d) {
@@ -165,43 +271,54 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           el.append("polygon")
             .attr("points", `0,${-r} ${r},0 0,${r} ${-r},0`)
             .attr("fill", fill)
-            .attr("stroke", "#1e293b")
-            .attr("stroke-width", 1.5)
+            .attr("stroke", d.id === highlightedNodeId ? "#3b82f6" : "#1e293b")
+            .attr("stroke-width", d.id === highlightedNodeId ? 3 : 1.5)
             .style("cursor", "pointer");
         } else {
           el.append("circle")
             .attr("r", r)
             .attr("fill", fill)
-            .attr("stroke", "#1e293b")
-            .attr("stroke-width", 1.5)
+            .attr("stroke", d.id === highlightedNodeId ? "#3b82f6" : "#1e293b")
+            .attr("stroke-width", d.id === highlightedNodeId ? 3 : 1.5)
             .style("cursor", "pointer");
         }
       });
     } else {
       node.append("circle")
-        .attr("r", (d) => nodeRadius(d.level))
+        .attr("r", (d) => nodeRadius(d.level, connCount.get(d.id)))
         .attr("fill", (d) => nodeColor(d.mastery))
-        .attr("stroke", (d) => (d.id === highlightedNodeId ? "#f8fafc" : "#1e293b"))
+        .attr("stroke", (d) => (d.id === highlightedNodeId ? "#3b82f6" : "#1e293b"))
         .attr("stroke-width", (d) => (d.id === highlightedNodeId ? 3 : 1.5))
         .style("cursor", "pointer");
     }
 
-    // Tooltip on hover
+    // Hover tooltip: label + mastery %
     const tooltip = g.append("g").style("display", "none").style("pointer-events", "none");
     const tooltipBg = tooltip.append("rect").attr("rx", 6).attr("fill", "#0f172a").attr("stroke", "#475569").attr("stroke-width", 1).attr("opacity", 0.95);
-    const tooltipText = tooltip.append("text").attr("fill", "#f1f5f9").attr("font-size", 12).attr("dy", "0.35em");
+    const tooltipLabel = tooltip.append("text").attr("fill", "#f1f5f9").attr("font-size", 12).attr("font-weight", "600");
+    const tooltipMastery = tooltip.append("text").attr("fill", "#64748b").attr("font-size", 11);
+    const tooltipDot = tooltip.append("circle").attr("r", 4);
 
     node.on("mouseenter", function (_event, d) {
-      if (!d.description) return;
-      const maxLen = 80;
-      tooltipText.text(d.description.length > maxLen ? d.description.slice(0, maxLen) + "\u2026" : d.description);
-      const bbox = tooltipText.node()?.getBBox();
-      if (!bbox) return;
-      const padX = 10, padY = 6;
-      tooltipBg.attr("width", bbox.width + padX * 2).attr("height", bbox.height + padY * 2);
-      tooltipText.attr("x", padX).attr("dy", bbox.height + padY - 2);
-      const nodeR = d.level === 0 ? 28 : 12;
-      tooltip.attr("transform", `translate(${(d.x || 0) - (bbox.width + padX * 2) / 2},${(d.y || 0) - nodeR - bbox.height - padY * 2 - 4})`);
+      const masteryPct = `${(d.mastery * 100).toFixed(0)}%`;
+      tooltipLabel.text(d.label);
+      tooltipMastery.text(`掌握度: ${masteryPct}`);
+      tooltipDot.attr("fill", nodeColor(d.mastery));
+
+      const labelBbox = tooltipLabel.node()?.getBBox() ?? { width: 0, height: 12 };
+      const masteryBbox = tooltipMastery.node()?.getBBox() ?? { width: 0, height: 11 };
+      const padX = 10, padY = 8, gap = 4;
+      const contentW = Math.max(labelBbox.width, masteryBbox.width + 12);
+      const totalW = contentW + padX * 2;
+      const totalH = labelBbox.height + gap + masteryBbox.height + padY * 2;
+
+      tooltipBg.attr("width", totalW).attr("height", totalH);
+      tooltipLabel.attr("x", padX).attr("y", padY + labelBbox.height);
+      tooltipDot.attr("cx", padX + 5).attr("cy", padY + labelBbox.height + gap + masteryBbox.height / 2 + 2);
+      tooltipMastery.attr("x", padX + 14).attr("y", padY + labelBbox.height + gap + masteryBbox.height);
+
+      const nr = nodeRadius(d.level, connCount.get(d.id));
+      tooltip.attr("transform", `translate(${(d.x || 0) - totalW / 2},${(d.y || 0) - nr - totalH - 6})`);
       tooltip.style("display", null);
     }).on("mouseleave", () => {
       tooltip.style("display", "none");
@@ -215,7 +332,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           const r = d.level === 0 ? 28 : t === "protagonist" ? 22 : t === "antagonist" ? 18 : 12;
           return r + 14;
         }
-        return nodeRadius(d.level) + 14;
+        return nodeRadius(d.level, connCount.get(d.id)) + 14;
       })
       .attr("text-anchor", "middle")
       .attr("fill", (d) => (d.id === highlightedNodeId ? "#ffffff" : "#f8fafc"))
@@ -223,9 +340,36 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       .attr("font-size", (d) => (d.level === 0 ? 12 : 10))
       .style("pointer-events", "none");
 
+    // Single-click vs double-click discrimination
+    let clickTimer: ReturnType<typeof setTimeout> | null = null;
     node.on("click", (_event, d) => {
-      const orig = graph.nodes.find((n) => n.id === d.id);
-      if (orig && onNodeClick) onNodeClick(orig);
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        // Double-click: zoom into neighborhood
+        const neighborIds = new Set([d.id]);
+        for (const l of links) {
+          const src = (l.source as SimNode).id;
+          const tgt = (l.target as SimNode).id;
+          if (src === d.id) neighborIds.add(tgt);
+          if (tgt === d.id) neighborIds.add(src);
+        }
+        if (d.x != null && d.y != null) {
+          svg.transition().duration(600).call(
+            zoom.transform,
+            d3.zoomIdentity
+              .translate(width / 2, height / 2)
+              .scale(Math.min(2.5, 4 / Math.sqrt(neighborIds.size)))
+              .translate(-(d.x || 0), -(d.y || 0))
+          );
+        }
+        return;
+      }
+      clickTimer = setTimeout(() => {
+        clickTimer = null;
+        const orig = graph.nodes.find((n) => n.id === d.id);
+        if (orig && onNodeClick) onNodeClick(orig);
+      }, 220);
     });
 
     if (highlightedNodeId) {
@@ -235,9 +379,72 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           .translate(width / 2, height / 2)
           .scale(1.35)
           .translate(-target.x, -target.y);
-        svg.transition().duration(350).call(zoom.transform, transform);
+        svg.transition().duration(500).call(zoom.transform, transform);
       }
     }
+
+    // Define minimap updater after nodes/links/dimensions are set
+    updateMinimap = (transform?: d3.ZoomTransform) => {
+      const mmEl = minimapSvgRef.current;
+      if (!mmEl || nodes.length === 0) return;
+      const mmSvg = d3.select(mmEl);
+      const mmW = 140;
+      const mmH = 100;
+
+      const xs = nodes.map((n) => n.x ?? 0);
+      const ys = nodes.map((n) => n.y ?? 0);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const rangeX = Math.max(maxX - minX, 1);
+      const rangeY = Math.max(maxY - minY, 1);
+      const pad = 10;
+      const scale = Math.min((mmW - pad * 2) / rangeX, (mmH - pad * 2) / rangeY);
+      const offX = pad + ((mmW - pad * 2) - rangeX * scale) / 2;
+      const offY = pad + ((mmH - pad * 2) - rangeY * scale) / 2;
+
+      const toX = (x: number) => (x - minX) * scale + offX;
+      const toY = (y: number) => (y - minY) * scale + offY;
+
+      mmSvg.selectAll("*").remove();
+      // Background
+      mmSvg.append("rect").attr("width", mmW).attr("height", mmH).attr("fill", "#0f172a").attr("rx", 6);
+
+      // Edges
+      mmSvg.append("g").selectAll("line").data(links).join("line")
+        .attr("x1", (d) => toX((d.source as SimNode).x ?? 0))
+        .attr("y1", (d) => toY((d.source as SimNode).y ?? 0))
+        .attr("x2", (d) => toX((d.target as SimNode).x ?? 0))
+        .attr("y2", (d) => toY((d.target as SimNode).y ?? 0))
+        .attr("stroke", "#334155")
+        .attr("stroke-width", 0.5);
+
+      // Nodes
+      mmSvg.append("g").selectAll("circle").data(nodes).join("circle")
+        .attr("cx", (d) => toX(d.x ?? 0))
+        .attr("cy", (d) => toY(d.y ?? 0))
+        .attr("r", (d) => Math.max(1.5, nodeRadius(d.level, connCount.get(d.id)) * scale * 0.8))
+        .attr("fill", (d) => nodeColor(d.mastery))
+        .attr("opacity", (d) => d.id === highlightedNodeId ? 1 : 0.7);
+
+      // Viewport rect
+      if (transform) {
+        const vx = -transform.x / transform.k;
+        const vy = -transform.y / transform.k;
+        const vw = width / transform.k;
+        const vh = height / transform.k;
+        mmSvg.append("rect")
+          .attr("x", toX(vx))
+          .attr("y", toY(vy))
+          .attr("width", vw * scale)
+          .attr("height", vh * scale)
+          .attr("fill", "rgba(59,130,246,0.08)")
+          .attr("stroke", "#3b82f6")
+          .attr("stroke-width", 1.5)
+          .attr("opacity", 0.8);
+      }
+    };
 
     simulation.on("tick", () => {
       link
@@ -251,6 +458,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           .attr("y", (d) => ((d.source as SimNode).y! + (d.target as SimNode).y!) / 2);
       }
       node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      updateMinimap();
     });
 
     return () => {
@@ -272,7 +480,19 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
   }, [render]);
 
   return (
-    <div className="relative w-full h-full min-h-[500px] bg-[var(--background)] rounded-lg border border-[var(--border)]">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full min-h-[500px] bg-[var(--background)] rounded-lg border border-[var(--border)]"
+    >
+      {/* Pulse animation */}
+      <style>{`
+        @keyframes pulse-ring {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 0.15; }
+        }
+        .pulse-ring { animation: pulse-ring 1.6s ease-in-out infinite; }
+      `}</style>
+
       {/* Legend */}
       <div className="absolute top-3 left-3 z-10 bg-[var(--card)]/90 backdrop-blur rounded-lg p-3 text-xs space-y-1.5 border border-[var(--border)]">
         <div className="font-semibold text-[var(--foreground)] mb-1">掌握度</div>
@@ -295,7 +515,48 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
         )}
       </div>
 
+      {/* Top-right controls */}
+      <div className="absolute top-3 right-3 z-10 flex gap-1.5">
+        <button
+          onClick={exportPng}
+          title="导出为 PNG"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded bg-[var(--card)]/90 backdrop-blur border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
+            <path d="M2 13h12v1.5H2z"/>
+          </svg>
+          导出
+        </button>
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "退出全屏" : "全屏"}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded bg-[var(--card)]/90 backdrop-blur border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--card)] transition-colors"
+        >
+          {isFullscreen ? (
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M5.5 1v3.5H2V6h5V1H5.5zM10.5 1H9v5h5V4.5h-3.5V1zM2 10v1.5h3.5V15H7v-5H2zM9 10v5h1.5v-3.5H14V10H9z"/>
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M1 1h5v1.5H2.5V5H1V1zM10 1h5v4h-1.5V2.5H10V1zM1 11h1.5v2.5H5V15H1v-4zM13.5 13.5H10V15h5v-4h-1.5v2.5z"/>
+            </svg>
+          )}
+          {isFullscreen ? "退出全屏" : "全屏"}
+        </button>
+      </div>
+
       <svg ref={svgRef} className="w-full h-full" />
+
+      {/* Minimap */}
+      {graph.nodes.length > 0 && (
+        <div className="absolute bottom-3 right-3 z-10 rounded-lg border border-[var(--border)] overflow-hidden shadow-lg">
+          <div className="px-2 py-0.5 text-[10px] text-[var(--muted-foreground)] bg-[var(--card)]/90 border-b border-[var(--border)]">
+            全局视图
+          </div>
+          <svg ref={minimapSvgRef} width={140} height={100} />
+        </div>
+      )}
 
       {graph.nodes.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center text-[var(--muted-foreground)]">

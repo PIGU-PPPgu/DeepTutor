@@ -71,6 +71,8 @@ const STORAGE_KEY = "intellitutor.co_writer.draft";
 const HISTORY_KEY = "intellitutor.co_writer.history";
 const SPLIT_RATIO_KEY = "intellitutor.co_writer.split_ratio";
 const SYNC_SCROLL_KEY = "intellitutor.co_writer.sync_scroll";
+const MIN_PANEL_RATIO = 0.15;
+const MAX_PANEL_RATIO = 0.85;
 
 const ACTION_LABELS: Record<EditAction, string> = {
   rewrite: "Rewrite",
@@ -199,6 +201,10 @@ export default function CoWriterPage() {
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorYCacheRef = useRef<{
+    signature: string;
+    ys: Map<number, number>;
+  } | null>(null);
   const [hasLoadedDraft, setHasLoadedDraft] = useState(false);
 
   useEffect(() => {
@@ -1006,13 +1012,6 @@ export default function CoWriterPage() {
   // wrapping and read the real pixel y of every source line. With both sides
   // expressed as pixel coordinates we can interpolate either direction with
   // a single piecewise-linear map.
-
-  // Cache: rebuilding the mirror is moderately expensive, so cache by
-  // (markdown content, textarea inner width). Both invalidate the cache.
-  const editorYCacheRef = useRef<{
-    signature: string;
-    ys: Map<number, number>;
-  } | null>(null);
 
   const measureEditorLineYs = useCallback((): Map<number, number> => {
     const editor = textareaRef.current;
