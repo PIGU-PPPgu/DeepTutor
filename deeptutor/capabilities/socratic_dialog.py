@@ -216,7 +216,10 @@ class SocraticDialogCapability(BaseCapability):
         async with stream.stage("assess", source=self.manifest.name):
             await stream.observation("正在评估你的理解程度…", source=self.manifest.name, stage="assess")
             assess_result = await self._llm_json(
-                ASSESS_PROMPT.format(history=history, knowledge=knowledge),
+                ASSESS_PROMPT.format(
+                    history=f"[学生最新输入] {student_response}\n\n{history}" if history == "（无历史对话）" else f"[学生最新输入] {student_response}\n\n{history}",
+                    knowledge=knowledge,
+                ),
                 fallback={
                     "level": "初学", "evidence": "缺乏足够信息",
                     "misconceptions": [], "strengths": [],
@@ -369,9 +372,9 @@ class SocraticDialogCapability(BaseCapability):
 
     async def _llm_text(self, prompt: str) -> str:
         config = get_llm_config()
-        full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         resp = await complete(
-            prompt=full_prompt,
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
             api_key=config.api_key,
             base_url=config.base_url,
             model=config.model,

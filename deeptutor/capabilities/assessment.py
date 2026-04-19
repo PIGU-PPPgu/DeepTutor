@@ -419,10 +419,11 @@ class AssessmentCapability(BaseCapability):
         difficulty = metadata.get("difficulty")
         topic_filter = metadata.get("topic_filter")
         student_answers = metadata.get("answers")
+        quiz_data = metadata.get("quiz_data")
 
         # 如果有学生答案，执行评分
         if student_answers:
-            await self._run_evaluate(kb_name, student_answers, stream)
+            await self._run_evaluate(kb_name, student_answers, stream, quiz_data=quiz_data)
             return
 
         # 否则生成题目
@@ -437,15 +438,16 @@ class AssessmentCapability(BaseCapability):
         async with stream.stage("generate", source=self.manifest.name):
             markdown = self.format_quiz_markdown(quiz)
             await stream.content(markdown, source=self.manifest.name,
-                                 metadata={"quiz": quiz})
+                                 metadata={"quiz": quiz, "quiz_data": quiz})
 
     async def _run_evaluate(
-        self, kb_name: str | None, answers: dict, stream: StreamBus
+        self, kb_name: str | None, answers: dict, stream: StreamBus,
+        quiz_data: dict[str, Any] | None = None,
     ) -> None:
         """执行评分并输出结果。"""
         async with stream.stage("evaluate", source=self.manifest.name):
             await stream.thinking("正在批改...", source=self.manifest.name)
-            result = await self.submit_answers(kb_name=kb_name, answers=answers)
+            result = await self.submit_answers(kb_name=kb_name, answers=answers, quiz_data=quiz_data)
             eval_md = self.format_evaluation_markdown(result)
             await stream.content(eval_md, source=self.manifest.name,
                                  metadata={"evaluation": result})
