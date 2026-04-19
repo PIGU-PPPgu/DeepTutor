@@ -255,8 +255,17 @@ class DeepQuestionCapability(BaseCapability):
                     stage="ideation",
                 )
 
+            try:
+                pdf_bytes = base64.b64decode(pdf_attachment.base64)
+            except Exception:
+                await stream.content(
+                    "无法解析上传的 PDF 文件，请确认文件格式正确。",
+                    source=self.name,
+                )
+                return None
+
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as temp_pdf:
-                temp_pdf.write(base64.b64decode(pdf_attachment.base64))
+                temp_pdf.write(pdf_bytes)
                 temp_pdf.flush()
                 return await coordinator.generate_from_exam(
                     exam_paper_path=temp_pdf.name,

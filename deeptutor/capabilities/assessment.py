@@ -405,8 +405,9 @@ class AssessmentCapability(BaseCapability):
         config_defaults={"temperature": 0.3},
     )
 
-    # 记录已出过的题目指纹，避免重复
-    _used_fingerprints: set[str] = set()
+    # 记录已出过的题目指纹，避免重复（实例级别，避免并发污染）
+    def __init__(self) -> None:
+        self._used_fingerprints: set[str] = set()
 
     async def run(self, context: UnifiedContext, stream: StreamBus) -> None:
         """运行测评流程（兼容旧版 context 调用）。"""
