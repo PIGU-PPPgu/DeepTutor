@@ -15,6 +15,8 @@ const nextConfig = {
 
   // Turbopack configuration (used when running `npm run dev:turbo`)
   turbopack: {
+    // Set workspace root so Turbopack can resolve packages in this submodule layout
+    root: __dirname,
     resolveAlias: {
       // Fix for mermaid's cytoscape dependency - use CJS version
       cytoscape: "cytoscape/dist/cytoscape.cjs.js",
