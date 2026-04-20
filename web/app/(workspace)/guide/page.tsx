@@ -66,6 +66,8 @@ export default function GuidePage() {
     Record<string, boolean>
   >({});
 
+  const [returnToGraphKb, setReturnToGraphKb] = useState<string | null>(null);
+
   const leftWidthPercent = sidebarCollapsed ? 0 : sidebarWide ? 75 : 25;
   const rightWidthPercent = sidebarCollapsed ? 100 : sidebarWide ? 25 : 75;
   const isIdle = sessionState.status === "idle";
@@ -160,6 +162,12 @@ export default function GuidePage() {
     if (topic && !session) {
       setTopicInput(topic);
     }
+    // Track return destination for loop-back affordance
+    const fromParam = params.get("from");
+    const kbParam = params.get("kb");
+    if (fromParam === "graph" && kbParam) {
+      setReturnToGraphKb(kbParam);
+    }
   }, [loadSession]);
 
   return (
@@ -176,6 +184,20 @@ export default function GuidePage() {
         }}
       >
         {isIdle ? (
+          <>
+          {returnToGraphKb && (
+            <div className="flex items-center mb-2">
+              <a
+                href={`/graph?kb=${encodeURIComponent(returnToGraphKb)}`}
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)]/60 px-2 py-1 text-[11px] text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 5l-7 7 7 7"/>
+                </svg>
+                {returnToGraphKb}
+              </a>
+            </div>
+          )}
           <div className="surface-card flex flex-col overflow-hidden border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)]">
             <div className="border-b border-[var(--border)] bg-[var(--muted)]/35 p-3">
               <h2 className="flex items-center gap-2 font-semibold text-[var(--foreground)]">
@@ -256,9 +278,21 @@ export default function GuidePage() {
               </button>
             </div>
           </div>
+          </>
         ) : (
           <>
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between">
+              {returnToGraphKb ? (
+                <a
+                  href={`/graph?kb=${encodeURIComponent(returnToGraphKb)}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)]/60 px-2 py-1 text-[11px] text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 12H5M12 5l-7 7 7 7"/>
+                  </svg>
+                  {returnToGraphKb}
+                </a>
+              ) : <span />}
               <button
                 onClick={() => setShowSaveModal(true)}
                 className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)]/40 hover:bg-[var(--primary)]/8 hover:text-[var(--primary)]"

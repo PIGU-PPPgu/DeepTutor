@@ -228,6 +228,7 @@ export default function ChatPage() {
   // (Quiz / Math Animator / Visualize / Deep Research). Default collapsed so
   // a fresh Chat / Deep Solve session has the shortest possible composer.
   const [panelCollapsed, setPanelCollapsed] = useState(true);
+  const [returnToGraphKb, setReturnToGraphKb] = useState<string | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showNotebookPicker, setShowNotebookPicker] = useState(false);
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
@@ -445,7 +446,7 @@ export default function ChatPage() {
     setCapabilityConfigs(loadCapabilityPlaygroundConfigs());
   }, []);
 
-  /* URL query params (capability, tool, topic) */
+  /* URL query params (capability, tool, topic, kb, from) */
   const [initialInput] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("topic") ?? "";
@@ -456,11 +457,27 @@ export default function ChatPage() {
     const p = new URLSearchParams(window.location.search);
     const qc = p.get("capability");
     const qt = p.getAll("tool");
+    const qKb = p.get("kb");
+    const qFrom = p.get("from");
+    const qRetKb = p.get("kb");
+
     if (qc !== null) handleSelectCapability(qc || "");
     else if (qt.length) {
       const valid = qt.filter((t): t is ToolName => ALL_TOOLS.some((d) => d.name === t));
       if (valid.length) setTools(Array.from(new Set(valid)));
     }
+
+    // Pre-select knowledge base from URL
+    if (qKb) setKBs([qKb]);
+
+    // When opening quiz mode with a topic, pre-fill quiz config topic field
+    if (qc === "deep_question") {
+      const qTopic = p.get("topic");
+      if (qTopic) setQuizConfig((prev) => ({ ...prev, topic: qTopic }));
+    }
+
+    // Track return destination for loop-back affordance
+    if (qFrom === "graph" && qRetKb) setReturnToGraphKb(qRetKb);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -645,7 +662,20 @@ export default function ChatPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--background)]">
       <div className="mx-auto flex w-full max-w-[960px] items-center justify-between px-6 pt-3 pb-0">
-        <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--foreground)]">{t(activeCap.label)}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--foreground)]">{t(activeCap.label)}</span>
+          {returnToGraphKb && (
+            <a
+              href={`/graph?kb=${encodeURIComponent(returnToGraphKb)}`}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--border)]/60 px-2 py-1 text-[11px] text-[var(--muted-foreground)] transition-colors hover:border-[var(--border)] hover:text-[var(--foreground)]"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
+              {returnToGraphKb}
+            </a>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowSaveModal(true)}

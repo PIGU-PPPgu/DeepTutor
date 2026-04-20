@@ -168,6 +168,39 @@ export default function GraphPage() {
     return buildBreadcrumb(graph.nodes, selectedNode.id);
   }, [selectedNode, graph]);
 
+  // Mastery-adaptive action data for the node detail panel
+  const nodeActionData = useMemo(() => {
+    if (!selectedNode) return null;
+    const topicEnc = encodeURIComponent(selectedNode.label);
+    const kbSuffix = selectedKb ? `&kb=${encodeURIComponent(selectedKb)}` : "";
+    const retSuffix = selectedKb
+      ? `&from=graph&kb=${encodeURIComponent(selectedKb)}`
+      : "&from=graph";
+    const m = selectedNode.mastery;
+
+    const hint =
+      m === 0 ? "建议先系统学习" :
+      m < 0.3 ? "掌握度低，先学后练" :
+      m < 0.8 ? "做题巩固理解" :
+      "已掌握，深化拓展";
+
+    const actions = [
+      { key: "guide", label: "学习引导", href: `/guide?topic=${topicEnc}${retSuffix}` },
+      { key: "quiz",  label: "生成测题", href: `/chat?capability=deep_question&topic=${topicEnc}${kbSuffix}${retSuffix}` },
+      { key: "chat",  label: "深度问答", href: `/chat?topic=${encodeURIComponent(`请解释并帮助我理解：${selectedNode.label}`)}${kbSuffix}${retSuffix}` },
+    ];
+
+    // First in list = primary (recommended)
+    let order: string[];
+    if (m === 0)       order = ["guide", "chat", "quiz"];
+    else if (m < 0.3)  order = ["guide", "quiz", "chat"];
+    else if (m < 0.8)  order = ["quiz", "guide", "chat"];
+    else               order = ["chat", "quiz", "guide"];
+
+    const orderedActions = order.map((k) => actions.find((a) => a.key === k)!);
+    return { hint, orderedActions };
+  }, [selectedNode, selectedKb]);
+
   return (
     <div className="flex h-full">
       {graph && (
@@ -363,30 +396,47 @@ export default function GraphPage() {
               </div>
             )}
 
-            <div className="pt-1 space-y-1.5">
-              <div className="text-xs font-medium text-[var(--foreground)] mb-1">开始学习</div>
-              <a
-                href={`/guide?topic=${encodeURIComponent(selectedNode.label)}`}
-                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-                学习引导
-              </a>
-              <a
-                href={`/chat?capability=deep_question&topic=${encodeURIComponent(selectedNode.label)}`}
-                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] transition-colors"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                生成测题
-              </a>
-              <a
-                href={`/chat?topic=${encodeURIComponent(`请解释并帮助我理解：${selectedNode.label}`)}`}
-                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] transition-colors"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                深度问答
-              </a>
-            </div>
+            {nodeActionData && (
+              <div className="pt-1 space-y-1.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-xs font-medium text-[var(--foreground)]">开始学习</div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)]">
+                    {nodeActionData.hint}
+                  </span>
+                </div>
+                {nodeActionData.orderedActions.map((action, idx) => (
+                  <a
+                    key={action.key}
+                    href={action.href}
+                    className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs ${
+                      idx === 0
+                        ? "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
+                        : "bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] transition-colors"
+                    }`}
+                  >
+                    {action.key === "guide" && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                      </svg>
+                    )}
+                    {action.key === "quiz" && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                      </svg>
+                    )}
+                    {action.key === "chat" && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    )}
+                    {action.label}
+                    {idx === 0 && (
+                      <span className="ml-auto text-[9px] opacity-60">推荐</span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
