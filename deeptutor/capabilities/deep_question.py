@@ -38,7 +38,122 @@ class DeepQuestionCapability(BaseCapability):
 
         answer_now_payload = extract_answer_now_context(context)
         if answer_now_payload is not None:
-            await self._run_answer_now(context, stream, answer_now_payload)
+            from deeptutor.capabilities._answer_now import (
+                build_answer_now_trace_metadata,
+                format_trace_summary,
+                join_chunks,
+                labeled_block,
+                make_skip_notice,
+                stream_synthesis,
+            )
+
+            overrides = context.config_overrides
+            language = context.language or "en"
+            topic = str(overrides.get("topic") or context.user_message or "").strip()
+            num_questions = int(overrides.get("num_questions", 1) or 1)
+            difficulty = str(overrides.get("difficulty", "") or "")
+            question_type = str(overrides.get("question_type", "") or "")
+            trace_summary = format_trace_summary(
+                answer_now_payload.get("events", []), language=language
+            )
+
+            skip_notice = make_skip_notice(
+                capability="deep_question",
+                language=language,
+                stages_skipped=["ideation", "evaluation"],
+            )
+
+            system_prompt = (
+                "You are a question generator. Produce quiz questions in JSON.\n"
+                "Return a JSON object with a 'results' list. Each item has 'qa_pair' "
+                "with keys: question, options (dict A-D), correct_answer, explanation, "
+                "question_type, difficulty.\n"
+            )
+            user_parts = [
+                labeled_block("Topic", topic),
+                labeled_block("Number of questions", str(num_questions)),
+            ]
+            if difficulty:
+                user_parts.append(labeled_block("Difficulty", difficulty))
+            if question_type:
+                user_parts.append(labeled_block("Question type", question_type))
+            user_parts.append(labeled_block("Partial trace", trace_summary))
+            user_prompt = "\n\n".join(user_parts)
+
+            trace_meta = build_answer_now_trace_metadata(
+                capability="deep_question",
+                phase="answer_now",
+                label="Generate questions (answer-now)",
+            )
+
+            chunks: list[str] = []
+            async with stream.stage("answer_now", source=self.name):
+                async for chunk in stream_synthesis(
+                    stream=stream,
+                    source=self.name,
+                    stage="answer_now",
+                    trace_meta=trace_meta,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    max_tokens=1800,
+                    push_content=True,
+                ):
+                    chunks.append(chunk)
+
+            raw_text = join_chunks(chunks)
+
+            # Parse JSON from response
+            import json
+            summary: dict[str, Any] = {"results": []}
+            try:
+                # Try to extract JSON from markdown fence
+                json_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw_text, re.DOTALL)
+                json_str = json_match.group(1) if json_match else raw_text
+                parsed = json.loads(json_str)
+                if isinstance(parsed, dict):
+                    if "results" in parsed:
+                        summary = parsed
+                    elif "questions" in parsed:
+                        # Wrap flat question items into qa_pair format
+                        items = []
+                        for q in parsed["questions"]:
+                            if "qa_pair" in q:
+                                items.append(q)
+                            else:
+                                items.append({"qa_pair": q})
+                        summary = {"results": items}
+            except (json.JSONDecodeError, AttributeError):
+                # Graceful fallback: generate a placeholder question
+                summary = {
+                    "results": [
+                        {
+                            "qa_pair": {
+                                "question": topic or "(unavailable)",
+                                "question_type": "written",
+                                "correct_answer": "",
+                                "explanation": "",
+                            }
+                        }
+                    ]
+                }
+
+            content_md = self._render_summary_markdown(summary)
+            if skip_notice:
+                content_md = skip_notice + "\n\n" + content_md
+            if content_md:
+                await stream.content(content_md, source=self.name, stage="answer_now")
+
+            result_payload: dict[str, Any] = {
+                "response": content_md or "",
+                "summary": summary,
+                "mode": "answer_now",
+            }
+            cost_meta = self._collect_cost_summary("question")
+            if cost_meta:
+                result_payload["metadata"] = {"cost_summary": cost_meta, "answer_now": True}
+            else:
+                result_payload["metadata"] = {"answer_now": True}
+            await stream.result(result_payload, source=self.name)
             return
 
         llm_config = get_llm_config()
