@@ -414,7 +414,21 @@ export default function GuidePage() {
             {/* Main content */}
             <div className="flex-1 min-h-0 flex flex-col">
               {showingSummary && sessionState.summary ? (
-                <CompletionSummary summary={sessionState.summary} />
+                <>
+                  <CompletionSummary summary={sessionState.summary} />
+                  {sessionState.topic && (
+                    <div className="flex justify-center px-6 pb-4 pt-2">
+                      <a
+                        href={`/chat?capability=deep_question&topic=${encodeURIComponent(sessionState.topic)}&from=guide`}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] shadow-sm transition-colors hover:opacity-90"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {t("Take Quiz on this topic")}
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                </>
               ) : sessionState.status === "learning" || (isCompleted && !showingSummary) ? (
                 <HTMLViewer
                   html={
