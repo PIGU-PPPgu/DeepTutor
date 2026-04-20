@@ -25,11 +25,13 @@ from deeptutor.api.routers._tutorbot_channel_schema import (
 
 class TestResolveConfigModel:
     def test_telegram_pairs_with_telegram_config(self) -> None:
+        pytest.importorskip("telegram", reason="python-telegram-bot not installed")
         from deeptutor.tutorbot.channels.telegram import TelegramChannel, TelegramConfig
 
         assert resolve_config_model(TelegramChannel) is TelegramConfig
 
     def test_slack_pairs_with_slack_config(self) -> None:
+        pytest.importorskip("slack_sdk", reason="slack-sdk not installed")
         from deeptutor.tutorbot.channels.slack import SlackChannel, SlackConfig
 
         assert resolve_config_model(SlackChannel) is SlackConfig
@@ -116,6 +118,7 @@ class TestCollectSecretFields:
 
 class TestChannelSchemaPayload:
     def test_telegram_payload_shape(self) -> None:
+        pytest.importorskip("telegram", reason="python-telegram-bot not installed")
         from deeptutor.tutorbot.channels.telegram import TelegramChannel
 
         payload = channel_schema_payload(TelegramChannel)
@@ -129,6 +132,7 @@ class TestChannelSchemaPayload:
         assert payload["default_config"]["enabled"] is False
 
     def test_slack_dm_subtree_inlined(self) -> None:
+        pytest.importorskip("slack_sdk", reason="slack-sdk not installed")
         from deeptutor.tutorbot.channels.slack import SlackChannel
 
         payload = channel_schema_payload(SlackChannel)
@@ -160,10 +164,11 @@ class TestEndpoint:
         assert res.status_code == 200
         body = res.json()
         assert set(body.keys()) >= {"channels", "global"}
-        # Telegram is always installed (no extra deps).
-        assert "telegram" in body["channels"]
+        # Discord uses only httpx/websockets (always available in server.txt).
+        assert "discord" in body["channels"]
 
     def test_telegram_entry_has_secret_fields(self, client: TestClient) -> None:
+        pytest.importorskip("telegram", reason="python-telegram-bot not installed")
         res = client.get("/api/v1/tutorbot/channels/schema")
         tg = res.json()["channels"]["telegram"]
         assert tg["secret_fields"] == ["token"]
@@ -177,9 +182,15 @@ class TestEndpoint:
 
 
 class TestAllChannelSchemas:
-    def test_returns_at_least_telegram(self) -> None:
+    def test_returns_at_least_discord(self) -> None:
+        # Discord uses only httpx/websockets — always loadable without extra channel SDKs.
         out = all_channel_schemas()
-        assert "telegram" in out
-        # Every payload has the four documented keys.
+        assert "discord" in out
+        # Every payload has the documented keys.
         for entry in out.values():
             assert {"name", "display_name", "default_config", "secret_fields", "json_schema"} <= entry.keys()
+
+    def test_returns_telegram_when_sdk_installed(self) -> None:
+        pytest.importorskip("telegram", reason="python-telegram-bot not installed")
+        out = all_channel_schemas()
+        assert "telegram" in out
