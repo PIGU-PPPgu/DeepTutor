@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import type { SelectedHistorySession } from "@/components/chat/HistorySessionPicker";
 import AssistantResponse from "@/components/common/AssistantResponse";
 import type { MessageRequestSnapshot } from "@/context/UnifiedChatContext";
+import { extractFlashcardResult } from "@/lib/flashcard-types";
 import { extractMathAnimatorResult } from "@/lib/math-animator-types";
 import { extractQuizQuestions } from "@/lib/quiz-types";
 import { extractVisualizeResult } from "@/lib/visualize-types";
@@ -28,6 +29,10 @@ import { CallTracePanel } from "./TracePanels";
 
 const MiniGraphCard = dynamic(() => import("@/components/chat/MiniGraphCard").then((m) => ({ default: m.MiniGraphCard })), { ssr: false });
 
+const FlashcardViewer = dynamic(
+  () => import("@/components/flashcard/FlashcardViewer"),
+  { ssr: false },
+);
 const MathAnimatorViewer = dynamic(
   () => import("@/components/math-animator/MathAnimatorViewer"),
   { ssr: false },
@@ -68,6 +73,7 @@ function getModeBadgeLabel(capability?: string | null) {
   if (capability === "deep_research") return "Deep Research";
   if (capability === "math_animator") return "Math Animator";
   if (capability === "visualize") return "Visualize";
+  if (capability === "flashcard") return "Flashcards";
   return capability;
 }
 
@@ -109,6 +115,11 @@ const AssistantMessage = memo(function AssistantMessage({
     };
   }, [msg.capability, resultEvent]);
 
+  const flashcardResult = useMemo(() => {
+    if (msg.capability !== "flashcard" || !resultEvent) return null;
+    return extractFlashcardResult(resultEvent.metadata);
+  }, [msg.capability, resultEvent]);
+
   const quizQuestions = useMemo(() => {
     if (msg.capability !== "deep_question" || !resultEvent) return null;
     return extractQuizQuestions(resultEvent.metadata);
@@ -137,6 +148,8 @@ const AssistantMessage = memo(function AssistantMessage({
           onConfirm={(items) => onConfirmOutline?.(items, outlinePreview.topic, outlinePreview.research_config)}
           status={outlineStatus}
         />
+      ) : flashcardResult ? (
+        <FlashcardViewer result={flashcardResult} />
       ) : mathAnimatorResult ? (
         <MathAnimatorViewer result={mathAnimatorResult} />
       ) : visualizeResult ? (

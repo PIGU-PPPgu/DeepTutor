@@ -109,5 +109,8 @@ class FlashcardCapability(BaseCapability):
             lines = ["## 闪卡生成结果\n"]
             for card in cards:
                 lines.append(f"**{card.get('front', card.get('question', ''))}** → {card.get('back', card.get('answer', ''))}")
-            lines.append(f"\n📋 共 {len(cards)} 张闪卡，复习周期：{schedule}")
+            lines.append(f"\n📋 共 {len(cards)} 张闪卡，复习周期：{_EBINGHAUS_INTERVALS}")
             await stream.content("\n".join(lines), source=self.manifest.name)
+
+        # Emit structured result so the frontend FlashcardViewer can parse the cards
+        await stream.result(result, source=self.manifest.name)

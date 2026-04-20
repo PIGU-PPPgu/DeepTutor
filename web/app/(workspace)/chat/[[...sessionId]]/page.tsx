@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import {
   BarChart3,
+  BookOpen,
   BrainCircuit,
   Clapperboard,
   Code2,
@@ -164,6 +165,14 @@ const CAPABILITIES: CapabilityDef[] = [
     label: "Visualize",
     description: "Generate SVG, Chart.js, or Mermaid visualizations",
     icon: BarChart3,
+    allowedTools: [],
+    defaultTools: [],
+  },
+  {
+    value: "flashcard",
+    label: "Flashcards",
+    description: "Auto-generate spaced-repetition flashcards from content",
+    icon: BookOpen,
     allowedTools: [],
     defaultTools: [],
   },
