@@ -362,6 +362,31 @@ export default function GraphPage() {
                 </div>
               </div>
             )}
+
+            <div className="pt-1 space-y-1.5">
+              <div className="text-xs font-medium text-[var(--foreground)] mb-1">开始学习</div>
+              <a
+                href={`/guide?topic=${encodeURIComponent(selectedNode.label)}`}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                学习引导
+              </a>
+              <a
+                href={`/chat?capability=deep_question&topic=${encodeURIComponent(selectedNode.label)}`}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                生成测题
+              </a>
+              <a
+                href={`/chat?topic=${encodeURIComponent(`请解释并帮助我理解：${selectedNode.label}`)}`}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-md text-xs bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)] hover:bg-[var(--muted)] transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                深度问答
+              </a>
+            </div>
           </div>
         )}
 

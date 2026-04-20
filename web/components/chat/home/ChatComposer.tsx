@@ -146,6 +146,7 @@ export default memo(function ChatComposer({
   onChangeVisualizeConfig,
   onChangeResearchConfig,
   onTogglePanelCollapsed,
+  initialInput,
 }: {
   composerRef: RefObject<HTMLDivElement | null>;
   capMenuRef: RefObject<HTMLDivElement | null>;
@@ -209,11 +210,12 @@ export default memo(function ChatComposer({
   onChangeVisualizeConfig: (next: VisualizeFormConfig) => void;
   onChangeResearchConfig: (next: DeepResearchFormConfig) => void;
   onTogglePanelCollapsed: () => void;
+  initialInput?: string;
 }) {
   const { t } = useTranslation();
   const CapIcon = activeCap.icon;
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialInput ?? "");
   const [showAtPopup, setShowAtPopup] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

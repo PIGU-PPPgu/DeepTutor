@@ -445,7 +445,12 @@ export default function ChatPage() {
     setCapabilityConfigs(loadCapabilityPlaygroundConfigs());
   }, []);
 
-  /* URL query params (capability, tool) */
+  /* URL query params (capability, tool, topic) */
+  const [initialInput] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("topic") ?? "";
+  });
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const p = new URLSearchParams(window.location.search);
@@ -767,6 +772,7 @@ export default function ChatPage() {
           onChangeVisualizeConfig={setVisualizeConfig}
           onChangeResearchConfig={setResearchConfig}
           onTogglePanelCollapsed={handleTogglePanelCollapsed}
+          initialInput={initialInput || undefined}
         />
       </div>
       <NotebookRecordPicker
