@@ -33,10 +33,7 @@ from deeptutor.core.stream_bus import StreamBus
 from deeptutor.services.llm import complete
 from deeptutor.services.llm.config import get_llm_config
 from deeptutor.services.knowledge_graph.graph_store import load_graph
-from deeptutor.services.knowledge_graph.mastery_tracker import (
-    QuizResult,
-    update_from_quiz,
-)
+from deeptutor.services.knowledge_graph.mastery_tracker import update_from_quiz_dicts
 
 logger = logging.getLogger(__name__)
 
@@ -573,9 +570,6 @@ class AssessmentCapability(BaseCapability):
         # 更新知识图谱
         if kb_name and quiz_results_for_mastery:
             try:
-                from deeptutor.services.knowledge_graph.mastery_tracker import (
-                    update_from_quiz_dicts,
-                )
                 update_from_quiz_dicts(kb_name, quiz_results_for_mastery)
             except Exception as e:
                 logger.warning("Failed to update mastery: %s", e)
