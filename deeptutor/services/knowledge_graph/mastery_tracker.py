@@ -131,14 +131,20 @@ def update_from_quiz_dicts(kb_name: str, results: list[dict]) -> None:
         is_correct = result.get("is_correct", False)
         topic = result.get("topic", "")
 
-        # Find matching nodes
+        # Find matching nodes — priority: exact match, then partial with length guard.
+        # Guard: require len(n.label) >= 4 for the n.label-in-topic direction to avoid
+        # short generic labels (e.g. "方程", "函数") matching unrelated specific topics.
         matched = []
         if topic:
-            matched = [
-                n
-                for n in graph.nodes
-                if topic in n.label or n.label in topic
-            ]
+            # 1. Exact match
+            matched = [n for n in graph.nodes if n.label == topic]
+            # 2. Partial match: topic is substring of label, or label (>=4 chars) is substring of topic
+            if not matched:
+                matched = [
+                    n
+                    for n in graph.nodes
+                    if topic in n.label or (len(n.label) >= 4 and n.label in topic)
+                ]
         if not matched:
             matched = [
                 n
