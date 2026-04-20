@@ -138,9 +138,16 @@ async def generate_plan(kb_name: str) -> dict | None:
     if not graph:
         return None
 
-    weak_nodes = [n for n in graph.get_weak_nodes(WEAK_THRESHOLD) if getattr(n, "mastery", None) is not None]
+    # Include both unstudied (mastery==0) and weak (0 < mastery < threshold) nodes.
+    # get_weak_nodes() filters mastery > 0, so we bypass it here to avoid silently
+    # dropping unstudied nodes in mixed-mastery knowledge bases.
+    weak_nodes = [
+        n for n in graph.nodes
+        if getattr(n, "mastery", None) is not None and n.mastery < WEAK_THRESHOLD
+    ]
     if not weak_nodes:
-        # 如果没有 <0.3 的节点，取所有尚未完全掌握的有效节点
+        # No nodes below the weak threshold — fall back to all unmastered nodes
+        # so we still produce a useful plan when mastery is uniformly moderate.
         weak_nodes = [
             n for n in graph.nodes
             if getattr(n, "mastery", None) is not None and n.mastery < 1.0
