@@ -155,6 +155,11 @@ export default function GuidePage() {
     if (session) {
       void loadSession(session);
     }
+    // Pre-fill topic from ?topic= param (e.g. when linked from KB page)
+    const topic = params.get("topic");
+    if (topic && !session) {
+      setTopicInput(topic);
+    }
   }, [loadSession]);
 
   return (

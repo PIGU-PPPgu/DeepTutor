@@ -98,6 +98,19 @@ export default function GraphPage() {
     }
   }, []);
 
+  // Auto-select KB from ?kb= URL param once graphs list is loaded
+  useEffect(() => {
+    if (graphs.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const kbParam = params.get("kb");
+    if (kbParam && graphs.includes(kbParam) && !selectedKb) {
+      setSelectedKb(kbParam);
+      void loadGraph(kbParam);
+    }
+    // Only fire once when graphs first load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphs]);
+
   const [expandStatus, setExpandStatus] = useState("");
 
   const handleExpand = async () => {

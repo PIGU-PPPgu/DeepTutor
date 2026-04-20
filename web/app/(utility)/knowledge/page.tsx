@@ -20,11 +20,13 @@ import {
   GraduationCap,
   Loader2,
   MessageSquare,
+  Network,
   NotebookPen,
   Pencil,
   PenLine,
   Plus,
   Search,
+  Sparkles,
   Star,
   Trash2,
   Upload,
@@ -174,6 +176,10 @@ function KnowledgePageContent() {
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
   const [createProcess, setCreateProcess] = useState<ProcessState>(EMPTY_PROCESS_STATE);
   const [uploadProcess, setUploadProcess] = useState<ProcessState>(EMPTY_PROCESS_STATE);
+  // Track KB name for post-import next-steps panel
+  const [completedCreateKb, setCompletedCreateKb] = useState<string | null>(null);
+  const [completedUploadKb, setCompletedUploadKb] = useState<string | null>(null);
+
   const socketsRef = useRef<Record<string, WebSocket>>({});
   const logSourcesRef = useRef<Record<ProcessKind, EventSource | null>>({
     create: null,
@@ -492,6 +498,25 @@ function KnowledgePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, qFilter, qActiveCategoryId]);
 
+  // Detect when create/upload task streams finish successfully → show next-steps panel
+  useEffect(() => {
+    if (createProcess.taskId && !createProcess.executing && !createProcess.error) {
+      const kbName = createProcess.label.startsWith("Create ")
+        ? createProcess.label.slice("Create ".length)
+        : createProcess.label;
+      setCompletedCreateKb(kbName || null);
+    }
+  }, [createProcess.executing, createProcess.error, createProcess.taskId, createProcess.label]);
+
+  useEffect(() => {
+    if (uploadProcess.taskId && !uploadProcess.executing && !uploadProcess.error) {
+      const kbName = uploadProcess.label.startsWith("Upload to ")
+        ? uploadProcess.label.slice("Upload to ".length)
+        : uploadProcess.label;
+      setCompletedUploadKb(kbName || null);
+    }
+  }, [uploadProcess.executing, uploadProcess.error, uploadProcess.taskId, uploadProcess.label]);
+
   const subscribeProgress = (kbName: string, expectedTaskId?: string) => {
     closeProgressSocket(kbName);
 
@@ -555,6 +580,7 @@ function KnowledgePageContent() {
 
       const data = (await res.json()) as KnowledgeTaskResponse;
       invalidateKnowledgeCaches();
+      setCompletedCreateKb(null); // reset until done
       if (data.task_id) {
         openTaskLogStream("create", data.task_id, `Create ${kbName}`);
         subscribeProgress(kbName, data.task_id);
@@ -571,6 +597,7 @@ function KnowledgePageContent() {
         }));
       } else {
         subscribeProgress(kbName);
+        setCompletedCreateKb(kbName);
       }
 
       setNewKbName("");
@@ -610,6 +637,7 @@ function KnowledgePageContent() {
 
       const data = (await res.json()) as KnowledgeTaskResponse;
       invalidateKnowledgeCaches();
+      setCompletedUploadKb(null); // reset until done
       if (data.task_id) {
         openTaskLogStream("upload", data.task_id, `Upload to ${targetKb}`);
         subscribeProgress(targetKb, data.task_id);
@@ -626,6 +654,7 @@ function KnowledgePageContent() {
         }));
       } else {
         subscribeProgress(targetKb);
+        setCompletedUploadKb(targetKb);
       }
 
       setUploadFiles([]);
@@ -922,6 +951,38 @@ function KnowledgePageContent() {
                       {createProcess.error}
                     </div>
                   )}
+
+                  {completedCreateKb && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          <Sparkles size={13} />
+                          {t('"{{name}}" is ready — what would you like to do?', { name: completedCreateKb })}
+                        </div>
+                        <button onClick={() => setCompletedCreateKb(null)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"><X size={13} /></button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/guide?topic=${encodeURIComponent(completedCreateKb)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <BookOpen size={12} /> {t("Learning Guide")}
+                        </Link>
+                        <Link
+                          href={`/graph?kb=${encodeURIComponent(completedCreateKb)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <Network size={12} /> {t("Knowledge Graph")}
+                        </Link>
+                        <Link
+                          href="/chat"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <MessageSquare size={12} /> {t("Chat / Quiz")}
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -1041,6 +1102,38 @@ function KnowledgePageContent() {
                       {uploadProcess.error}
                     </div>
                   )}
+
+                  {completedUploadKb && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          <Sparkles size={13} />
+                          {t('"{{name}}" updated — what would you like to do?', { name: completedUploadKb })}
+                        </div>
+                        <button onClick={() => setCompletedUploadKb(null)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"><X size={13} /></button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/guide?topic=${encodeURIComponent(completedUploadKb)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <BookOpen size={12} /> {t("Learning Guide")}
+                        </Link>
+                        <Link
+                          href={`/graph?kb=${encodeURIComponent(completedUploadKb)}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <Network size={12} /> {t("Knowledge Graph")}
+                        </Link>
+                        <Link
+                          href="/chat"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+                        >
+                          <MessageSquare size={12} /> {t("Chat / Quiz")}
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
@@ -1123,6 +1216,33 @@ function KnowledgePageContent() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Quick actions — only for ready KBs */}
+                      {resolveKbStatus(kb) === "ready" && !kbNeedsReindex(kb) && (
+                        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[var(--border)]/50 pt-3">
+                          <Link
+                            href={`/guide?topic=${encodeURIComponent(kb.name)}`}
+                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--muted)]/40 px-2.5 py-1 text-[11px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--foreground)]/20 hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                            title={t("Open Learning Guide with this knowledge base")}
+                          >
+                            <BookOpen size={11} /> {t("Guide")}
+                          </Link>
+                          <Link
+                            href={`/graph?kb=${encodeURIComponent(kb.name)}`}
+                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--muted)]/40 px-2.5 py-1 text-[11px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--foreground)]/20 hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                            title={t("View Knowledge Graph for this knowledge base")}
+                          >
+                            <Network size={11} /> {t("Graph")}
+                          </Link>
+                          <Link
+                            href="/chat"
+                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--muted)]/40 px-2.5 py-1 text-[11px] font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--foreground)]/20 hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                            title={t("Chat or take a quiz using this knowledge base")}
+                          >
+                            <MessageSquare size={11} /> {t("Chat / Quiz")}
+                          </Link>
+                        </div>
+                      )}
 
                       {progress?.message && (
                         <div className="mt-3 rounded-lg bg-[var(--muted)] p-3">
