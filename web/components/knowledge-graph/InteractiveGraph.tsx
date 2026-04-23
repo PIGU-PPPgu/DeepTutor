@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import type { SimulationNodeDatum, SimulationLinkDatum } from "d3";
-import type { KGGraph, KGNode, KGStats } from "./graph-api";
-import { fetchStats } from "./graph-api";
+import type { KGGraph, KGNode } from "./graph-api";
 
 interface SimNode extends SimulationNodeDatum {
   id: string;
@@ -55,12 +54,10 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
   const svgRef = useRef<SVGSVGElement>(null);
   const minimapSvgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [stats, setStats] = useState<KGStats | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  useEffect(() => {
-    fetchStats(kbName).then(setStats).catch(() => {});
-  }, [kbName, graph]);
+  // Auto-disable minimap & some effects for large graphs
+  const isLargeGraph = graph.nodes.length > 300;
 
   // Listen for fullscreen changes
   useEffect(() => {
@@ -383,14 +380,29 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       }
     }
 
-    // Define minimap updater after nodes/links/dimensions are set
-    updateMinimap = (transform?: d3.ZoomTransform) => {
-      const mmEl = minimapSvgRef.current;
-      if (!mmEl || nodes.length === 0) return;
-      const mmSvg = d3.select(mmEl);
-      const mmW = 140;
-      const mmH = 100;
+    // --- Minimap: throttled, incremental updates ---
+    let mmRafId = 0;
+    let mmInitialized = false;
+    // Pre-computed mapping helpers (closed over nodes/links)
+    const mmW = 140;
+    const mmH = 100;
+    const pad = 10;
 
+    // Lazy init: create persistent minimap elements once
+    const initMinimap = () => {
+      const mmEl = minimapSvgRef.current;
+      if (!mmEl || nodes.length === 0) return false;
+      const mmSvg = d3.select(mmEl);
+      mmSvg.selectAll("*").remove();
+      mmSvg.append("rect").attr("width", mmW).attr("height", mmH).attr("fill", "#0f172a").attr("rx", 6);
+      // Persistent groups for edges/nodes/viewport
+      mmSvg.append("g").attr("class", "mm-edges");
+      mmSvg.append("g").attr("class", "mm-nodes");
+      mmSvg.append("g").attr("class", "mm-viewport");
+      return true;
+    };
+
+    const computeMmScale = () => {
       const xs = nodes.map((n) => n.x ?? 0);
       const ys = nodes.map((n) => n.y ?? 0);
       const minX = Math.min(...xs);
@@ -399,46 +411,66 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       const maxY = Math.max(...ys);
       const rangeX = Math.max(maxX - minX, 1);
       const rangeY = Math.max(maxY - minY, 1);
-      const pad = 10;
-      const scale = Math.min((mmW - pad * 2) / rangeX, (mmH - pad * 2) / rangeY);
-      const offX = pad + ((mmW - pad * 2) - rangeX * scale) / 2;
-      const offY = pad + ((mmH - pad * 2) - rangeY * scale) / 2;
+      const s = Math.min((mmW - pad * 2) / rangeX, (mmH - pad * 2) / rangeY);
+      const oX = pad + ((mmW - pad * 2) - rangeX * s) / 2;
+      const oY = pad + ((mmH - pad * 2) - rangeY * s) / 2;
+      return { minX, minY, s, oX, oY };
+    };
 
-      const toX = (x: number) => (x - minX) * scale + offX;
-      const toY = (y: number) => (y - minY) * scale + offY;
+    updateMinimap = (transform?: d3.ZoomTransform) => {
+      const mmEl = minimapSvgRef.current;
+      if (!mmEl || nodes.length === 0) return;
+      const mmSvg = d3.select(mmEl);
 
-      mmSvg.selectAll("*").remove();
-      // Background
-      mmSvg.append("rect").attr("width", mmW).attr("height", mmH).attr("fill", "#0f172a").attr("rx", 6);
+      if (!mmInitialized) {
+        if (!initMinimap()) return;
+        mmInitialized = true;
+      }
 
-      // Edges
-      mmSvg.append("g").selectAll("line").data(links).join("line")
+      const { minX, minY, s: sc, oX, oY } = computeMmScale();
+      const toX = (x: number) => (x - minX) * sc + oX;
+      const toY = (y: number) => (y - minY) * sc + oY;
+
+      // Update edges (incremental join)
+      mmSvg.select(".mm-edges").selectAll<SVGLineElement, SimLink>("line")
+        .data(links)
+        .join(
+          (enter) => enter.append("line").attr("stroke", "#334155").attr("stroke-width", 0.5),
+          (update) => update,
+          (exit) => exit.remove(),
+        )
         .attr("x1", (d) => toX((d.source as SimNode).x ?? 0))
         .attr("y1", (d) => toY((d.source as SimNode).y ?? 0))
         .attr("x2", (d) => toX((d.target as SimNode).x ?? 0))
-        .attr("y2", (d) => toY((d.target as SimNode).y ?? 0))
-        .attr("stroke", "#334155")
-        .attr("stroke-width", 0.5);
+        .attr("y2", (d) => toY((d.target as SimNode).y ?? 0));
 
-      // Nodes
-      mmSvg.append("g").selectAll("circle").data(nodes).join("circle")
+      // Update nodes (incremental join)
+      mmSvg.select(".mm-nodes").selectAll<SVGCircleElement, SimNode>("circle")
+        .data(nodes)
+        .join(
+          (enter) => enter.append("circle"),
+          (update) => update,
+          (exit) => exit.remove(),
+        )
         .attr("cx", (d) => toX(d.x ?? 0))
         .attr("cy", (d) => toY(d.y ?? 0))
-        .attr("r", (d) => Math.max(1.5, nodeRadius(d.level, connCount.get(d.id)) * scale * 0.8))
+        .attr("r", (d) => Math.max(1.5, nodeRadius(d.level, connCount.get(d.id)) * sc * 0.8))
         .attr("fill", (d) => nodeColor(d.mastery))
         .attr("opacity", (d) => d.id === highlightedNodeId ? 1 : 0.7);
 
       // Viewport rect
+      const vp = mmSvg.select(".mm-viewport");
+      vp.selectAll("rect").remove();
       if (transform) {
         const vx = -transform.x / transform.k;
         const vy = -transform.y / transform.k;
         const vw = width / transform.k;
         const vh = height / transform.k;
-        mmSvg.append("rect")
+        vp.append("rect")
           .attr("x", toX(vx))
           .attr("y", toY(vy))
-          .attr("width", vw * scale)
-          .attr("height", vh * scale)
+          .attr("width", vw * sc)
+          .attr("height", vh * sc)
           .attr("fill", "rgba(59,130,246,0.08)")
           .attr("stroke", "#3b82f6")
           .attr("stroke-width", 1.5)
@@ -458,10 +490,13 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           .attr("y", (d) => ((d.source as SimNode).y! + (d.target as SimNode).y!) / 2);
       }
       node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-      updateMinimap();
+      // Throttle minimap to ~15fps via rAF
+      cancelAnimationFrame(mmRafId);
+      mmRafId = requestAnimationFrame(() => updateMinimap());
     });
 
     return () => {
+      cancelAnimationFrame(mmRafId);
       simulation.stop();
     };
   }, [graph, highlightedNodeId, onNodeClick]);
@@ -507,10 +542,10 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
             <span className="text-[var(--muted-foreground)]">{label}</span>
           </div>
         ))}
-        {stats && (
+        {isLargeGraph && (
           <div className="mt-2 pt-2 border-t border-[var(--border)] text-[var(--muted-foreground)]">
-            <div>总计: {stats.total} 个知识点</div>
-            <div>平均掌握: {(stats.mastery_avg * 100).toFixed(0)}%</div>
+            <div>大图模式 ({graph.nodes.length} 节点)</div>
+            <div>已关闭小地图以提升性能</div>
           </div>
         )}
       </div>
@@ -548,8 +583,8 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
 
       <svg ref={svgRef} className="w-full h-full" />
 
-      {/* Minimap */}
-      {graph.nodes.length > 0 && (
+      {/* Minimap — hidden for large graphs to save perf */}
+      {!isLargeGraph && graph.nodes.length > 0 && (
         <div className="absolute bottom-3 right-3 z-10 rounded-lg border border-[var(--border)] overflow-hidden shadow-lg">
           <div className="px-2 py-0.5 text-[10px] text-[var(--muted-foreground)] bg-[var(--card)]/90 border-b border-[var(--border)]">
             全局视图

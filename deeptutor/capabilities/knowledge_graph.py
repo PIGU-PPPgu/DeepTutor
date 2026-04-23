@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from collections import defaultdict, deque
@@ -12,6 +11,7 @@ from typing import Any
 from deeptutor.core.capability_protocol import BaseCapability, CapabilityManifest
 from deeptutor.core.context import UnifiedContext
 from deeptutor.core.stream_bus import StreamBus
+from deeptutor.utils.json_parser import parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -349,35 +349,16 @@ class KnowledgeGraphCapability(BaseCapability):
 
     @staticmethod
     def _parse_triples(text: str) -> list[dict[str, Any]]:
-        """Parse JSON from LLM response, tolerating markdown fences."""
-        text = text.strip()
-        # Strip markdown fences
-        if text.startswith("```"):
-            lines = text.splitlines()
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            text = "\n".join(lines).strip()
-        # Try direct JSON parse
-        try:
-            data = json.loads(text)
-            if isinstance(data, list):
-                return data
-            if isinstance(data, dict):
-                return data.get("triples", data.get("data", []))
-        except json.JSONDecodeError:
-            pass
-        # Try extracting JSON from text (find first [ or {)
-        for start_char, end_char in [('[', ']'), ('{', '}')]:
-            start = text.find(start_char)
-            if start >= 0:
-                end = text.rfind(end_char)
-                if end > start:
-                    try:
-                        data = json.loads(text[start:end + 1])
-                        if isinstance(data, list):
-                            return data
-                        if isinstance(data, dict):
-                            return data.get("triples", data.get("data", []))
-                    except json.JSONDecodeError:
-                        continue
+        """Parse triples JSON from LLM response using the shared robust parser."""
+        data = parse_json_response(text, logger_instance=logger, fallback=[])
+
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+
+        if isinstance(data, dict):
+            triples = data.get("triples", data.get("data", []))
+            if isinstance(triples, list):
+                return [item for item in triples if isinstance(item, dict)]
+
         logger.warning("Failed to parse triples JSON from LLM")
         return []
