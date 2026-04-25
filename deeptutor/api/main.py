@@ -199,6 +199,8 @@ app.mount(
 # Some router modules load YAML settings at import time.
 from deeptutor.api.routers import (
     agent_config,
+    auth,
+    book,
     chat,
     co_writer,
     dashboard,
@@ -212,6 +214,7 @@ from deeptutor.api.routers import (
     question_notebook,
     sessions,
     settings,
+    skills,
     solve,
     system,
     tutorbot,
@@ -232,14 +235,16 @@ app.include_router(question.router, prefix="/api/v1/question", tags=["question"]
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(co_writer.router, prefix="/api/v1/co_writer", tags=["co_writer"])
-app.include_router(notebook.router, prefix="/api/v1/notebook", tags=["notebook"])
 app.include_router(guide.router, prefix="/api/v1/guide", tags=["guide"])
+app.include_router(notebook.router, prefix="/api/v1/notebook", tags=["notebook"])
+app.include_router(book.router, prefix="/api/v1/book", tags=["book"])
 app.include_router(memory.router, prefix="/api/v1/memory", tags=["memory"])
 app.include_router(sessions.router, prefix="/api/v1/sessions", tags=["sessions"])
 app.include_router(
     question_notebook.router, prefix="/api/v1/question-notebook", tags=["question-notebook"]
 )
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
 app.include_router(git_sync.router)
 app.include_router(plugins_api.router, prefix="/api/v1/plugins", tags=["plugins"])
@@ -254,6 +259,9 @@ app.include_router(parent_report.router, prefix="/api/v1", tags=["parent-report"
 # Unified WebSocket endpoint
 app.include_router(unified_ws.router, prefix="/api/v1", tags=["unified-ws"])
 app.include_router(assessment.router, tags=["assessment"])
+
+# Auth router (no prefix needed, routes include /api/auth/)
+app.include_router(auth.router, tags=["auth"])
 
 
 @app.get("/")
