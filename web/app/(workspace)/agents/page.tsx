@@ -759,6 +759,9 @@ function BotsTab({
         setShowCreate(false);
         resetForm();
         await onReload();
+      } else {
+        const err = (await res.json().catch(() => ({}))) as { detail?: string };
+        onToast(err.detail ?? t("Create TutorBot failed"));
       }
     } finally {
       setCreating(false);
@@ -772,7 +775,11 @@ function BotsTab({
       body: JSON.stringify({ bot_id: bid }),
     });
     if (res.ok) { onToast(`${bid} started`); await onReload(); }
-  }, [onReload, onToast]);
+    else {
+      const err = (await res.json().catch(() => ({}))) as { detail?: string };
+      onToast(err.detail ?? t("Start failed"));
+    }
+  }, [onReload, onToast, t]);
 
   const stopBot = useCallback(async (bid: string) => {
     const res = await fetch(apiUrl(`/api/v1/tutorbot/${bid}`), { method: "DELETE" });

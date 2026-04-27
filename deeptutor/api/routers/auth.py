@@ -15,6 +15,7 @@ DB_PATH = os.path.expanduser("~/.intellitutor/users.db")
 JWT_SECRET = os.environ.get("JWT_SECRET", "intellitutor-dev-secret-change-in-prod")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES = 86400 * 7  # 7 days
+INVITE_CODE = os.environ.get("INTELLITUTOR_INVITE_CODE") or os.environ.get("INVITE_CODE")
 
 
 async def get_db():
@@ -60,6 +61,10 @@ async def register(body: dict):
     username = body.get("username", "").strip()
     password = body.get("password", "")
     display_name = body.get("display_name", username).strip()
+    invite_code = body.get("invite_code", "")
+
+    if INVITE_CODE and invite_code != INVITE_CODE:
+        raise HTTPException(403, "邀请码无效或已过期")
 
     if not username or not password:
         raise HTTPException(400, "Username and password required")

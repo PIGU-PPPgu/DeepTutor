@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode } from "react";
@@ -9,7 +8,6 @@ import {
   BookOpen,
   Bot,
   Brain,
-  Github,
   Library,
   MessageSquare,
   Network,
@@ -18,6 +16,7 @@ import {
   PenLine,
   Plus,
   Settings,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -44,9 +43,11 @@ const PRIMARY_NAV: NavEntry[] = [
   { href: "/graph", label: "Knowledge Graph", icon: Network },
 ];
 
-const SECONDARY_NAV: NavEntry[] = [{ href: "/settings", label: "Settings", icon: Settings }];
+const SECONDARY_NAV: NavEntry[] = [
+  { href: "/features", label: "Features", icon: Sparkles },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
 const DEFAULT_SESSION_VIEWPORT_CLASS_NAME = "max-h-[112px]";
-const GITHUB_REPO_URL = "https://github.com/HKUDS/DeepTutor";
 
 interface SidebarShellProps {
   sessions?: SessionSummary[];
@@ -94,16 +95,10 @@ export function SidebarShell({
         <div className="relative mb-2 flex h-9 w-9 items-center justify-center">
           <Link
             href="/"
-            aria-label="DeepTutor"
-            className="flex items-center justify-center transition-opacity duration-150 group-hover/sb:opacity-0"
+            aria-label="Home"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--background)] text-[11px] font-semibold tracking-tight text-[var(--foreground)] transition-opacity duration-150 group-hover/sb:opacity-0"
           >
-            <Image
-              src="/logo-ver2.png"
-              alt="DeepTutor"
-              width={22}
-              height={22}
-              className="rounded-md"
-            />
+            LS
           </Link>
           <button
             onClick={() => setCollapsed(false)}
@@ -177,16 +172,6 @@ export function SidebarShell({
             );
           })}
           {footerSlot}
-          <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title="GitHub"
-            aria-label="GitHub"
-            className="mt-1 flex h-9 w-9 items-center justify-center rounded-xl text-[var(--muted-foreground)]/70 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--foreground)]"
-          >
-            <Github size={15} strokeWidth={1.6} />
-          </a>
           <VersionBadge collapsed />
         </div>
       </aside>
@@ -199,9 +184,8 @@ export function SidebarShell({
       {/* Header: logo + collapse toggle */}
       <div className="flex h-12 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo-ver2.png" alt="IntelliTutor" width={28} height={20} />
           <span className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
-            IntelliTutor
+            Learning Studio
           </span>
         </Link>
         <button
@@ -291,16 +275,6 @@ export function SidebarShell({
         {footerSlot}
         <div className="mt-0.5 flex items-center gap-0.5">
           <VersionBadge />
-          <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title="GitHub"
-            aria-label="GitHub"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
-          >
-            <Github size={13} strokeWidth={1.7} />
-          </a>
         </div>
       </div>
     </aside>

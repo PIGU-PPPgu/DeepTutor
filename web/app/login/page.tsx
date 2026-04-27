@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { login, register } = useAuth();
@@ -22,7 +23,7 @@ export default function LoginPage() {
       if (mode === "login") {
         await login(username, password);
       } else {
-        await register(username, password, displayName || username);
+        await register(username, password, displayName || username, inviteCode);
       }
       router.push("/");
     } catch (err: any) {
@@ -66,6 +67,21 @@ export default function LoginPage() {
                 className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="你的名字（可选）"
               />
+            </div>
+          )}
+
+          {mode === "register" && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-1">邀请码</label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.trim())}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="输入邀请注册码"
+                required
+              />
+              <p className="mt-1 text-xs text-[var(--muted)]">注册暂时仅开放给受邀用户。</p>
             </div>
           )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { InteractiveGraph } from "@/components/knowledge-graph/InteractiveGraph";
 import { GraphStats } from "@/components/knowledge-graph/GraphStats";
 import { GraphTree } from "@/components/knowledge-graph/GraphTree";
@@ -243,6 +244,14 @@ export default function GraphPage() {
           >
             {loading ? "生成中..." : "生成图谱"}
           </button>
+
+          <Link
+            href="/book"
+            className="px-3 py-1.5 text-sm rounded border border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            title="上传/整理课外书后，可回到知识图谱生成结构视图"
+          >
+            添加课外书
+          </Link>
 
           {selectedKb && (
             <button
