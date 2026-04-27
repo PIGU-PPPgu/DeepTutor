@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode } from "react";
@@ -95,10 +96,10 @@ export function SidebarShell({
         <div className="relative mb-2 flex h-9 w-9 items-center justify-center">
           <Link
             href="/"
-            aria-label="Home"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--background)] text-[11px] font-semibold tracking-tight text-[var(--foreground)] transition-opacity duration-150 group-hover/sb:opacity-0"
+            aria-label="IntelliTutor"
+            className="flex items-center justify-center transition-opacity duration-150 group-hover/sb:opacity-0"
           >
-            LS
+            <Image src="/intellitutor-mark.svg" alt="IntelliTutor" width={28} height={28} className="rounded-lg" />
           </Link>
           <button
             onClick={() => setCollapsed(false)}
@@ -184,8 +185,9 @@ export function SidebarShell({
       {/* Header: logo + collapse toggle */}
       <div className="flex h-12 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
+          <Image src="/intellitutor-mark.svg" alt="IntelliTutor" width={26} height={26} className="rounded-lg" />
           <span className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
-            Learning Studio
+            IntelliTutor
           </span>
         </Link>
         <button

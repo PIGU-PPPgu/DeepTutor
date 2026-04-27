@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 // Refresh at most once per hour. Tune via env if needed.
 export const revalidate = 3600;
 
-const DEFAULT_REPO = "HKUDS/DeepTutor";
+const DEFAULT_REPO = "PIGU-PPPgu/IntelliTutor";
 
 interface GithubRelease {
   tag_name: string;
@@ -44,7 +44,7 @@ export async function GET() {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "deeptutor-web",
+    "User-Agent": "intellitutor-web",
   };
   if (process.env.GITHUB_TOKEN) {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
