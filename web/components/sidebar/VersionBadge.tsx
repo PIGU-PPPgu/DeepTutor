@@ -126,11 +126,7 @@ export function VersionBadge({ collapsed = false }: VersionBadgeProps) {
     // latest GitHub release as an informational placeholder.
     const displayTag = build?.display ?? latestNorm ?? null;
 
-    const href =
-      data?.url ??
-      (latestNorm
-        ? `https://github.com/HKUDS/DeepTutor/releases/tag/${latestNorm}`
-        : "https://github.com/HKUDS/DeepTutor/releases");
+    const href = "https://github.com/PIGU-PPPgu/IntelliTutor";
 
     let tooltip: string;
     if (status === "latest" && displayTag) {

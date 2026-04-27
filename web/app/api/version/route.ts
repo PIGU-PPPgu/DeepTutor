@@ -32,7 +32,7 @@ interface VersionPayload {
 const FALLBACK: VersionPayload = {
   tag: null,
   name: null,
-  url: `https://github.com/${DEFAULT_REPO}/releases`,
+  url: `https://github.com/${DEFAULT_REPO}`,
   publishedAt: null,
   source: "fallback",
 };
@@ -57,7 +57,7 @@ export async function GET() {
     });
     if (!res.ok) {
       return NextResponse.json(
-        { ...FALLBACK, url: `https://github.com/${repo}/releases` },
+        { ...FALLBACK, url: `https://github.com/${repo}` },
         { status: 200 },
       );
     }
@@ -65,7 +65,7 @@ export async function GET() {
     const payload: VersionPayload = {
       tag: data.tag_name ?? null,
       name: data.name ?? null,
-      url: data.html_url ?? `https://github.com/${repo}/releases`,
+      url: data.html_url ?? `https://github.com/${repo}`,
       publishedAt: data.published_at ?? null,
       source: "github",
     };
@@ -78,7 +78,7 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json(
-      { ...FALLBACK, url: `https://github.com/${repo}/releases` },
+      { ...FALLBACK, url: `https://github.com/${repo}` },
       { status: 200 },
     );
   }
