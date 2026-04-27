@@ -84,7 +84,7 @@ class RAGTool(_PromptHintsMixin, BaseTool):
         extra_kwargs = {
             key: value
             for key, value in kwargs.items()
-            if key not in {"query", "kb_name", "mode", "event_sink"}
+            if key not in {"query", "kb_name", "event_sink"}
         }
 
         result = await rag_search(

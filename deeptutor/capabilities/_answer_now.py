@@ -36,7 +36,9 @@ from deeptutor.services.llm import (
     get_llm_config,
     get_token_limit_kwargs,
     stream as llm_stream,
+    supports_response_format,
 )
+from deeptutor.services.prompt.manager import get_prompt_manager
 
 
 # Per-event content cap. The trace can grow unbounded (especially for
@@ -197,7 +199,9 @@ async def stream_synthesis(
     if model:
         extra_kwargs.update(get_token_limit_kwargs(model, max_tokens))
     if response_format is not None:
-        extra_kwargs["response_format"] = response_format
+        binding = getattr(llm_config, "binding", None) or "openai"
+        if supports_response_format(binding, model):
+            extra_kwargs["response_format"] = response_format
 
     chunks: list[str] = []
     try:
@@ -238,12 +242,26 @@ def join_chunks(chunks: list[str]) -> str:
     return clean_thinking_tags(text, binding, model)
 
 
+def load_answer_now_prompts(module: str, language: str) -> dict[str, Any]:
+    """Load the bilingual ``answer_now.yaml`` prompts for a capability.
+
+    All capability fast paths share the same payload contract
+    (``original``, ``current_draft``, ``execution_trace``); each one only
+    differs in tone and JSON schema. Centralizing the loader keeps
+    ``deeptutor/capabilities/*.py`` free of any per-language strings — the
+    Python code only formats the user template with capability-specific
+    variables.
+    """
+    return get_prompt_manager().load_prompts(module, "answer_now", language)
+
+
 __all__ = [
     "build_answer_now_trace_metadata",
     "extract_answer_now_context",
     "format_trace_summary",
     "join_chunks",
     "labeled_block",
+    "load_answer_now_prompts",
     "make_skip_notice",
     "stream_synthesis",
 ]

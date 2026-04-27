@@ -61,7 +61,6 @@ def test_build_research_execution_policy_supports_llm_only_mode() -> None:
     )
 
     assert policy["researching"]["enable_rag"] is False
-    assert policy["researching"]["enable_rag"] is False
     assert policy["researching"]["enable_web_search"] is False
     assert policy["researching"]["enable_paper_search"] is False
     assert policy["researching"]["enable_run_code"] is False

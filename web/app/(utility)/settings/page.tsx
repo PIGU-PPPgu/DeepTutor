@@ -9,6 +9,8 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  Eye,
+  EyeOff,
   Loader2,
   Plus,
   Rocket,
@@ -23,7 +25,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 
-import { writeStoredLanguage } from "@/context/AppShellContext";
+import { writeStoredLanguage } from "@/context/app-shell-storage";
 import { apiUrl } from "@/lib/api";
 import { setTheme as applyThemePreference } from "@/lib/theme";
 import GitSyncButton from "./GitSyncButton";
@@ -377,6 +379,7 @@ function SettingsPageContent() {
   const [testRunning, setTestRunning] = useState<ServiceName | null>(null);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [toast, setToast] = useState<string>("");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [providers, setProviders] = useState<Record<ServiceName, ProviderOption[]>>({ llm: [], embedding: [], search: [] });
@@ -458,6 +461,10 @@ function SettingsPageContent() {
     activeService === "search" &&
     searchProviderRaw === "perplexity" &&
     !String(activeProfile?.api_key || "").trim();
+
+  useEffect(() => {
+    setShowApiKey(false);
+  }, [activeService, activeProfile?.id]);
 
   // -- UI preference helpers ----------------------------------------------
 
@@ -896,7 +903,7 @@ function SettingsPageContent() {
                       : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                   }`}
                 >
-                  {v === "en" ? "English" : "中文"}
+                  {v === "en" ? t("language.english") : t("language.chinese")}
                 </button>
               ))}
             </div>
@@ -1082,12 +1089,26 @@ function SettingsPageContent() {
                     </div>
                     <div className="sm:col-span-2">
                       <div className="mb-1.5 text-[12px] text-[var(--muted-foreground)]">{t("API Key")}</div>
-                      <input
-                        className={inputClass}
-                        value={activeProfile.api_key}
-                        onChange={(e) => updateProfileField("api_key", e.target.value)}
-                        placeholder="sk-..."
-                      />
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? "text" : "password"}
+                          autoComplete="new-password"
+                          spellCheck={false}
+                          className={`${inputClass} pr-10 font-mono`}
+                          value={activeProfile.api_key}
+                          onChange={(e) => updateProfileField("api_key", e.target.value)}
+                          placeholder="sk-..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey((prev) => !prev)}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                          aria-label={showApiKey ? t("Hide API key") : t("Show API key")}
+                          title={showApiKey ? t("Hide API key") : t("Show API key")}
+                        >
+                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <div className="mb-1.5 text-[12px] text-[var(--muted-foreground)]">{t("API Version")}</div>

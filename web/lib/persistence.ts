@@ -252,5 +252,4 @@ export const EXCLUDE_FIELDS = {
     "uploadedFile",
   ] as const,
   RESEARCH: ["status", "logs", "progress"] as const,
-  GUIDE: ["isLoading", "loadingMessage"] as const,
 } as const;

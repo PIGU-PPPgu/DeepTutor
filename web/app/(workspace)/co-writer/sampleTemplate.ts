@@ -1,8 +1,8 @@
 const FENCE = "```";
 
-export const CO_WRITER_SAMPLE_TEMPLATE = `# IntelliTutor Co-Writer
+export const CO_WRITER_SAMPLE_TEMPLATE = `# DeepTutor Co-Writer
 
-> IntelliTutor's built-in writing canvas for notes, reports, tutorials, and AI-assisted drafts.
+> DeepTutor's built-in writing canvas for notes, reports, tutorials, and AI-assisted drafts.
 
 ### Features
 
@@ -10,7 +10,7 @@ export const CO_WRITER_SAMPLE_TEMPLATE = `# IntelliTutor Co-Writer
 - Real-time preview for headings, tables, code, math, flowchart, and sequence diagrams
 - AI editing workflows for rewrite, shorten, and expand
 - HTML tag decoding for tags like <sub>, <sup>, <abbr>, and <mark>
-- A practical starter draft for IntelliTutor product docs and learning content
+- A practical starter draft for DeepTutor product docs and learning content
 
 ## Table of Contents
 
@@ -18,23 +18,23 @@ export const CO_WRITER_SAMPLE_TEMPLATE = `# IntelliTutor Co-Writer
 
 [TOC]
 
-#IntelliTutor Mission
-##IntelliTutor Product Surface
-###IntelliTutor Learning Experience
-####IntelliTutor Co-Writer
-#####IntelliTutor Knowledge Layer
-######IntelliTutor Agent Runtime
+#DeepTutor Mission
+##DeepTutor Product Surface
+###DeepTutor Learning Experience
+####DeepTutor Co-Writer
+#####DeepTutor Knowledge Layer
+######DeepTutor Agent Runtime
 
-#IntelliTutor Docs [Project Overview](#intellitutor-mission "Jump to project overview")
-##IntelliTutor Authoring [Co-Writer Section](#intellitutor-co-writer "Jump to co-writer section")
-###IntelliTutor Research [Learning Note](#intellitutor-learning-note "Jump to learning note")
+#DeepTutor Docs [Project Overview](#deeptutor-mission "Jump to project overview")
+##DeepTutor Authoring [Co-Writer Section](#deeptutor-co-writer "Jump to co-writer section")
+###DeepTutor Research [Learning Note](#deeptutor-learning-note "Jump to learning note")
 
 ## Headers (Underline)
 
-IntelliTutor Learning Note
+DeepTutor Learning Note
 =============
 
-IntelliTutor Study Outline
+DeepTutor Study Outline
 -------------
 
 ### Characters
@@ -50,25 +50,25 @@ Superscript: X<sub>2</sub>, Subscript: O<sup>2</sup>
 
 **Abbreviation(link HTML abbr tag)**
 
-The <abbr title="Large Language Model">LLM</abbr> layer powers IntelliTutor while the <abbr title="Retrieval Augmented Generation">RAG</abbr> layer provides grounded knowledge support.
+The <abbr title="Large Language Model">LLM</abbr> layer powers DeepTutor while the <abbr title="Retrieval Augmented Generation">RAG</abbr> layer provides grounded knowledge support.
 
 ### Blockquotes
 
-> IntelliTutor helps students turn questions into structured understanding.
+> DeepTutor helps students turn questions into structured understanding.
 >
-> "Learn deeply, write clearly.", [IntelliTutor](#intellitutor-co-writer)
+> "Learn deeply, write clearly.", [DeepTutor](#deeptutor-co-writer)
 
 ### Links
 
-[IntelliTutor Overview](#intellitutor-mission)
+[DeepTutor Overview](#deeptutor-mission)
 
-[IntelliTutor Co-Writer](#intellitutor-co-writer "co-writer section")
+[DeepTutor Co-Writer](#deeptutor-co-writer "co-writer section")
 
-[IntelliTutor Runtime](#intellitutor-agent-runtime)
+[DeepTutor Runtime](#deeptutor-agent-runtime)
 
-[Reference link][intellitutor-doc]
+[Reference link][deeptutor-doc]
 
-[intellitutor-doc]: #intellitutor-learning-note
+[deeptutor-doc]: #deeptutor-learning-note
 
 ### Code Blocks
 
@@ -80,7 +80,7 @@ The <abbr title="Large Language Model">LLM</abbr> layer powers IntelliTutor whil
 
     from deeptutor.runtime.orchestrator import ChatOrchestrator
     orchestrator = ChatOrchestrator()
-    print("IntelliTutor is ready.")
+    print("DeepTutor is ready.")
 
 #### Python
 
@@ -103,12 +103,11 @@ ${FENCE}
 
 ${FENCE}json
 {
-  "app_name": "IntelliTutor",
+  "app_name": "DeepTutor",
   "default_capability": "chat",
   "enabled_tools": ["rag", "web_search", "code_execution", "reason"],
   "ui": {
-    "co_writer_template": true,
-    "notebook_export": true
+    "co_writer_template": true
   }
 }
 ${FENCE}
@@ -116,8 +115,8 @@ ${FENCE}
 #### HTML code
 
 ${FENCE}html
-<section class="intellitutor-card">
-  <h1>IntelliTutor</h1>
+<section class="deeptutor-card">
+  <h1>DeepTutor</h1>
   <p>Write, revise, and organize learning content with AI.</p>
 </section>
 ${FENCE}
@@ -126,24 +125,24 @@ ${FENCE}
 
 ![](/logo-ver2.png)
 
-> IntelliTutor brand mark used inside the co-writer template.
+> DeepTutor brand mark used inside the co-writer template.
 
 ### Lists
 
-- IntelliTutor Chat
-- IntelliTutor Co-Writer
-- IntelliTutor Research
+- DeepTutor Chat
+- DeepTutor Co-Writer
+- DeepTutor Research
 
 1. Draft a concept note
 2. Ask AI to refine it
-3. Save it to a notebook
+3. Export the polished markdown
 
 ### Tables
 
 Feature       | Description
 ------------- | -------------
 Co-Writer     | Draft and refine Markdown content
-Notebook      | Save and organize outputs
+Chat          | Ask questions and iterate ideas
 Research      | Build structured multi-step reports
 
 | Capability    | Primary Use Case                     |
@@ -154,7 +153,7 @@ Research      | Build structured multi-step reports
 
 ### Markdown extras
 
-- [x] Draft a IntelliTutor product note
+- [x] Draft a DeepTutor product note
 - [x] Add references and structure
 - [ ] Polish the final explanation
   - [ ] Check headings
@@ -174,7 +173,7 @@ $$ \sin(\alpha)^{\theta}=\sum_{i=0}^{n}(x^i + \cos(f))$$
 
 ${FENCE}flow
 st=>start: Student asks a question
-op=>operation: IntelliTutor analyzes intent
+op=>operation: DeepTutor analyzes intent
 cond=>condition: Need deep workflow?
 chat=>operation: Answer with chat capability
 solve=>operation: Route to deep solve
@@ -190,11 +189,11 @@ ${FENCE}
 ### Sequence Diagram
 
 ${FENCE}seq
-Student->IntelliTutor: Ask for help
-IntelliTutor->Notebook: Load context
-Note right of IntelliTutor: Collect memory\nand relevant knowledge
-IntelliTutor-->Student: Return guided response
-Student->>IntelliTutor: Request rewrite in co-writer
+Student->DeepTutor: Ask for help
+DeepTutor->KnowledgeBase: Load context
+Note right of DeepTutor: Collect memory\nand relevant knowledge
+DeepTutor-->Student: Return guided response
+Student->>DeepTutor: Request rewrite in co-writer
 ${FENCE}
 
 ### End

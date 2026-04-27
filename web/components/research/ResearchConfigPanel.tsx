@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   DeepResearchFormConfig,
@@ -21,6 +22,8 @@ interface ResearchConfigPanelProps {
   onToggleCollapsed: () => void;
 }
 
+// Note: `label` values are i18n keys resolved via `t(...)` at render time so
+// the dropdown options match the active UI language.
 const MODE_OPTIONS: Array<{ value: Exclude<ResearchMode, "">; label: string }> = [
   { value: "notes", label: "Study Notes" },
   { value: "report", label: "Report" },
@@ -67,7 +70,7 @@ function NumberSlider({
   );
 }
 
-export default function ResearchConfigPanel({
+export default memo(function ResearchConfigPanel({
   value,
   errors: _errors,
   collapsed,
@@ -80,8 +83,8 @@ export default function ResearchConfigPanel({
     next: DeepResearchFormConfig[K],
   ) => onChange({ ...value, [key]: next });
 
-  const rawSummary = summarizeResearchConfig(value);
-  const summary = rawSummary === "Incomplete settings" ? undefined : rawSummary;
+  const rawSummary = summarizeResearchConfig(value, t);
+  const summary = rawSummary === t("Incomplete settings") ? undefined : rawSummary;
 
   return (
     <CollapsibleConfigSection
@@ -91,7 +94,7 @@ export default function ResearchConfigPanel({
       bodyClassName="space-y-2 px-3.5 pb-2.5"
     >
       <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-        <Field label="Mode" width="min-w-[130px] flex-1">
+        <Field label={t("Mode")} width="min-w-[130px] flex-1">
           <select
             value={value.mode}
             onChange={(e) => update("mode", e.target.value as ResearchMode)}
@@ -100,12 +103,12 @@ export default function ResearchConfigPanel({
             <option value="">{t("Select...")}</option>
             {MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.label)}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Depth" width="min-w-[130px] flex-1">
+        <Field label={t("Depth")} width="min-w-[130px] flex-1">
           <select
             value={value.depth}
             onChange={(e) => update("depth", e.target.value as ResearchDepth)}
@@ -114,7 +117,7 @@ export default function ResearchConfigPanel({
             <option value="">{t("Select...")}</option>
             {DEPTH_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.label)}
               </option>
             ))}
           </select>
@@ -123,14 +126,14 @@ export default function ResearchConfigPanel({
       {value.depth === "manual" && (
         <div className="space-y-1.5 rounded-md bg-[var(--muted-foreground)]/5 px-3 py-2">
           <NumberSlider
-            label="Sub-topics"
+            label={t("Sub-topics")}
             value={value.manual_subtopics ?? 3}
             min={1}
             max={10}
             onChange={(n) => update("manual_subtopics", n)}
           />
           <NumberSlider
-            label="Iterations"
+            label={t("Iterations")}
             value={value.manual_max_iterations ?? 3}
             min={1}
             max={8}
@@ -140,4 +143,4 @@ export default function ResearchConfigPanel({
       )}
     </CollapsibleConfigSection>
   );
-}
+});

@@ -5,16 +5,18 @@ import { memo, useCallback, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   BookOpen,
+  ClipboardList,
   Coins,
   Copy,
   MessageSquare,
-  RotateCcw,
+  RefreshCcw,
   X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SelectedHistorySession } from "@/components/chat/HistorySessionPicker";
+import type { SelectedQuestionEntry } from "@/components/chat/QuestionBankPicker";
 import AssistantResponse from "@/components/common/AssistantResponse";
 import type { MessageRequestSnapshot } from "@/context/UnifiedChatContext";
 import { extractFlashcardResult } from "@/lib/flashcard-types";
@@ -66,7 +68,9 @@ interface NotebookReferenceGroup {
   count: number;
 }
 
-function getModeBadgeLabel(capability?: string | null) {
+// Returns the i18n key (and a sensible fallback) for the capability badge
+// shown above the user's message. Callers must run `t(...)` on the result.
+function getModeBadgeLabel(capability?: string | null): string {
   if (!capability || capability === "chat") return "Chat";
   if (capability === "deep_solve") return "Deep Solve";
   if (capability === "deep_question") return "Quiz Generation";
@@ -213,6 +217,7 @@ const AnswerNowRow = memo(function AnswerNowRow({
 AnswerNowRow.displayName = "AnswerNowRow";
 
 function CostFooter({ cost, tokens, calls }: { cost: number; tokens: number; calls: number }) {
+  const { t } = useTranslation();
   const formatCost = (usd: number) => {
     if (usd < 0.01) return `$${usd.toFixed(4)}`;
     return `$${usd.toFixed(2)}`;
@@ -226,9 +231,9 @@ function CostFooter({ cost, tokens, calls }: { cost: number; tokens: number; cal
       <Coins size={10} strokeWidth={1.5} className="shrink-0" />
       <span>{formatCost(cost)}</span>
       <span className="opacity-40">·</span>
-      <span>{formatTokens(tokens)} tokens</span>
+      <span>{formatTokens(tokens)} {t("tokens")}</span>
       <span className="opacity-40">·</span>
-      <span>{calls} calls</span>
+      <span>{calls} {t("calls")}</span>
     </div>
   );
 }
@@ -272,7 +277,7 @@ const UserMessage = memo(function UserMessage({
       <div className="max-w-[75%] space-y-1.5">
         <div className="flex justify-end pr-1">
           <span className="text-[10px] tracking-wide text-[var(--muted-foreground)]">
-            {getModeBadgeLabel(msg.capability)}
+            {t(getModeBadgeLabel(msg.capability))}
           </span>
         </div>
         {msg.attachments?.some((a) => a.type === "image") && (
@@ -334,16 +339,25 @@ UserMessage.displayName = "UserMessage";
 export const ReferenceChips = memo(function ReferenceChips({
   historySessions,
   notebookGroups,
+  questionEntries,
   onRemoveHistory,
   onRemoveNotebook,
+  onRemoveQuestion,
 }: {
   historySessions: SelectedHistorySession[];
   notebookGroups: NotebookReferenceGroup[];
+  questionEntries: SelectedQuestionEntry[];
   onRemoveHistory: (sessionId: string) => void;
   onRemoveNotebook: (notebookId: string) => void;
+  onRemoveQuestion: (entryId: number) => void;
 }) {
   const { t } = useTranslation();
-  if (historySessions.length === 0 && notebookGroups.length === 0) return null;
+  if (
+    historySessions.length === 0 &&
+    notebookGroups.length === 0 &&
+    questionEntries.length === 0
+  )
+    return null;
 
   return (
     <div className="mb-3 flex flex-wrap gap-2">
@@ -381,6 +395,26 @@ export const ReferenceChips = memo(function ReferenceChips({
           </button>
         </span>
       ))}
+      {questionEntries.map((entry) => (
+        <span
+          key={entry.id}
+          className="inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] text-amber-800 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <ClipboardList size={12} strokeWidth={1.8} className="shrink-0" />
+          <span className="shrink-0 font-medium">{t("Question Bank")}</span>
+          <span className="truncate text-amber-700/90 dark:text-amber-200/90">
+            {entry.question.length > 40
+              ? `${entry.question.slice(0, 40)}…`
+              : entry.question}
+          </span>
+          <button
+            onClick={() => onRemoveQuestion(entry.id)}
+            className="shrink-0 opacity-60 transition hover:opacity-100"
+          >
+            <X size={12} />
+          </button>
+        </span>
+      ))}
     </div>
   );
 });
@@ -394,7 +428,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   language,
   onAnswerNow,
   onCopyAssistantMessage,
-  onRetryMessage,
+  onRegenerateMessage,
   onConfirmOutline,
   graphData,
   kbName,
@@ -408,7 +442,7 @@ export const ChatMessageList = memo(function ChatMessageList({
     assistantMsg?: { content: string; events?: StreamEvent[] },
   ) => void;
   onCopyAssistantMessage: (content: string) => void | Promise<void>;
-  onRetryMessage: (snapshot?: MessageRequestSnapshot) => void;
+  onRegenerateMessage: () => void;
   onConfirmOutline?: (outline: Array<{ title: string; overview: string }>, topic: string, researchConfig?: Record<string, unknown> | null) => void;
   graphData?: KGGraph | null;
   kbName?: string;
@@ -459,6 +493,13 @@ export const ChatMessageList = memo(function ChatMessageList({
       });
   }, [messages]);
 
+  const lastAssistantIndex = useMemo(() => {
+    for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
+      if (messages[idx].role === "assistant") return idx;
+    }
+    return -1;
+  }, [messages]);
+
   return (
     <>
       {messageRows.map(({ msg, originalIndex, pairedUserMessage }) => {
@@ -477,10 +518,13 @@ export const ChatMessageList = memo(function ChatMessageList({
         const msgDone = !isActiveAssistant;
         const showActions =
           msgDone && hasVisibleMarkdownContent(msg.content);
-        const showRetry =
+        const isLastAssistant = i === lastAssistantIndex;
+        const showRegenerate =
           showActions &&
-          (!pairedUserMessage?.capability || pairedUserMessage?.capability === "chat") &&
-          Boolean(pairedUserMessage?.requestSnapshot);
+          !isStreaming &&
+          isLastAssistant &&
+          Boolean(pairedUserMessage) &&
+          (!pairedUserMessage?.capability || pairedUserMessage?.capability === "chat");
 
         // The "Answer now" affordance lives inside the trace panel for the
         // currently-streaming assistant turn. We hand the panel a thin
@@ -529,14 +573,14 @@ export const ChatMessageList = memo(function ChatMessageList({
                   <div className="flex gap-2">
                     <RoughActionButton
                       icon={Copy}
-                      label="Copy"
+                      label={t("Copy")}
                       onClick={() => void onCopyAssistantMessage(msg.content)}
                     />
-                    {showRetry && (
+                    {showRegenerate && (
                       <RoughActionButton
-                        icon={RotateCcw}
-                        label="Retry"
-                        onClick={() => onRetryMessage(pairedUserMessage?.requestSnapshot)}
+                        icon={RefreshCcw}
+                        label={t("Regenerate")}
+                        onClick={() => onRegenerateMessage()}
                       />
                     )}
                   </div>

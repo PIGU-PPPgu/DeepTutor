@@ -432,8 +432,10 @@ async def test_deep_research_capability_requires_explicit_config_and_streams_tra
         def __init__(self, **kwargs: Any) -> None:
             captured["pipeline_init"] = kwargs
 
-        async def _phase1_planning(self, topic: str) -> str:
-            await captured["pipeline_init"]["progress_callback"](
+        async def run(self, topic: str) -> dict[str, Any]:
+            # progress_callback is fire-and-forget (sync) inside the
+            # capability; just call it.
+            captured["pipeline_init"]["progress_callback"](
                 {"status": "gathering evidence", "stage": "researching", "block_id": "block_1"}
             )
             await captured["pipeline_init"]["trace_callback"](
@@ -454,7 +456,9 @@ async def test_deep_research_capability_requires_explicit_config_and_streams_tra
                     "call_id": "research-tool-1",
                 }
             )
-            return topic
+            # Allow the scheduled progress task to flush onto the bus.
+            await asyncio.sleep(0)
+            return {"report": f"Report about {topic}", "metadata": {"citations": 3}}
 
     def fake_load_config_with_main(_: str) -> dict[str, Any]:
         return {
@@ -494,6 +498,12 @@ async def test_deep_research_capability_requires_explicit_config_and_streams_tra
             "mode": "report",
             "depth": "standard",
             "sources": ["kb", "web", "papers"],
+            # Provide a confirmed outline so the capability skips the
+            # outline-preview short-circuit and runs the full pipeline.
+            "confirmed_outline": [
+                {"title": "Background", "overview": "Why this topic matters"},
+                {"title": "Approaches", "overview": "How to do it"},
+            ],
         },
         language="en",
     )

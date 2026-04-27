@@ -1,3 +1,5 @@
+"use client";
+
 import WorkspaceSidebar from "@/components/sidebar/WorkspaceSidebar";
 import { UnifiedChatProvider } from "@/context/UnifiedChatContext";
 import { useAuth } from "@/components/AuthProvider";
