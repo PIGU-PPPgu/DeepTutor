@@ -16,6 +16,7 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "intellitutor-dev-secret-change-in-pro
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES = 86400 * 7  # 7 days
 INVITE_CODE = os.environ.get("INTELLITUTOR_INVITE_CODE") or os.environ.get("INVITE_CODE")
+INVITE_LIMIT = int(os.environ.get("INTELLITUTOR_INVITE_LIMIT") or os.environ.get("INVITE_LIMIT") or "0")
 
 
 async def get_db():
@@ -23,14 +24,19 @@ async def get_db():
     db = await aiosqlite.connect(DB_PATH)
     db.row_factory = aiosqlite.Row
     await db.execute(
-        """CREATE TABLE IF NOT EXISTS users (
+"""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             display_name TEXT NOT NULL,
+            invite_code TEXT,
             created_at TEXT NOT NULL
         )"""
     )
+    # Existing deployments may have been created before invite_code existed.
+    cols = await db.execute_fetchall("PRAGMA table_info(users)")
+    if "invite_code" not in {c[1] for c in cols}:
+        await db.execute("ALTER TABLE users ADD COLUMN invite_code TEXT")
     await db.commit()
     return db
 
@@ -81,11 +87,18 @@ async def register(body: dict):
         if existing:
             raise HTTPException(409, "Username already taken")
 
+        if INVITE_CODE and INVITE_LIMIT > 0:
+            rows = await db.execute_fetchall(
+                "SELECT COUNT(*) AS count FROM users WHERE invite_code = ?", (invite_code,)
+            )
+            if int(rows[0]["count"]) >= INVITE_LIMIT:
+                raise HTTPException(403, "邀请码名额已满")
+
         pw_hash = bcrypt.hash(password)
         now = datetime.now(timezone.utc).isoformat()
         cursor = await db.execute(
-            "INSERT INTO users (username, password_hash, display_name, created_at) VALUES (?, ?, ?, ?)",
-            (username, pw_hash, display_name, now),
+            "INSERT INTO users (username, password_hash, display_name, invite_code, created_at) VALUES (?, ?, ?, ?, ?)",
+            (username, pw_hash, display_name, invite_code if INVITE_CODE else None, now),
         )
         await db.commit()
         user_id = cursor.lastrowid
