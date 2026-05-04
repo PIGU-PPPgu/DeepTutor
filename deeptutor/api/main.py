@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DeepTutor API",
+    title="IntelliTutor API",
     version="1.0.0",
     lifespan=lifespan,
     # Disable automatic trailing slash redirects to prevent protocol downgrade issues
@@ -219,6 +219,7 @@ from deeptutor.api.routers import (
     unified_ws,
     vision_solver,
 )
+from deeptutor.api.routers import auth, kg_graph
 
 # Include routers
 app.include_router(solve.router, prefix="/api/v1", tags=["solve"])
@@ -246,10 +247,14 @@ app.include_router(attachments.router, prefix="/api/attachments", tags=["attachm
 # Unified WebSocket endpoint
 app.include_router(unified_ws.router, prefix="/api/v1", tags=["unified-ws"])
 
+# IntelliTutor custom routers
+app.include_router(auth.router, tags=["auth"])
+app.include_router(kg_graph.router, prefix="/api/v1", tags=["knowledge-graph"])
+
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to DeepTutor API"}
+    return {"message": "Welcome to IntelliTutor API"}
 
 
 if __name__ == "__main__":
