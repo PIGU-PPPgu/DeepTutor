@@ -1,5 +1,6 @@
 import WorkspaceSidebar from "@/components/sidebar/WorkspaceSidebar";
 import { UnifiedChatProvider } from "@/context/UnifiedChatContext";
+import { ChangelogModal } from "@/components/ChangelogModal";
 
 export default function WorkspaceLayout({
   children,
@@ -8,6 +9,7 @@ export default function WorkspaceLayout({
 }>) {
   return (
     <UnifiedChatProvider>
+      <ChangelogModal />
       <div className="flex h-screen overflow-hidden">
         <WorkspaceSidebar />
         <main className="flex-1 overflow-hidden bg-[var(--background)]">

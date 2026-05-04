@@ -23,6 +23,8 @@ import { useTranslation } from "react-i18next";
 import SessionList from "@/components/SessionList";
 import { TutorBotRecent } from "@/components/sidebar/TutorBotRecent";
 import { VersionBadge } from "@/components/sidebar/VersionBadge";
+import { UserMenu } from "@/components/UserMenu";
+import { ChangelogModal } from "@/components/ChangelogModal";
 import type { SessionSummary } from "@/lib/session-api";
 
 interface NavEntry {
@@ -186,6 +188,7 @@ export function SidebarShell({
           >
             <Github size={15} strokeWidth={1.6} />
           </a>
+          <UserMenu />
           <VersionBadge collapsed />
         </div>
       </aside>
@@ -297,8 +300,14 @@ export function SidebarShell({
           );
         })}
         {footerSlot}
+        <div className="flex items-center justify-between px-1 py-1">
+          <div className="flex items-center gap-0.5">
+            <VersionBadge />
+          </div>
+          <UserMenu />
+        </div>
         <div className="mt-0.5 flex items-center gap-0.5">
-          <VersionBadge />
+          <a
           <a
             href={GITHUB_REPO_URL}
             target="_blank"
