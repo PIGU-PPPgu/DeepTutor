@@ -92,7 +92,8 @@ class SQLiteSessionStore:
                     updated_at REAL NOT NULL,
                     compressed_summary TEXT DEFAULT '',
                     summary_up_to_msg_id INTEGER DEFAULT 0,
-                    preferences_json TEXT DEFAULT '{}'
+                    preferences_json TEXT DEFAULT '{}',
+                    user_id TEXT DEFAULT 'pigouwu'
                 );
 
                 CREATE TABLE IF NOT EXISTS messages (
@@ -189,7 +190,10 @@ class SQLiteSessionStore:
                 conn.execute(
                     "ALTER TABLE sessions ADD COLUMN preferences_json TEXT DEFAULT '{}'"
                 )
-            conn.commit()
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+            if "user_id" not in cols:
+                conn.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT DEFAULT 'pigouwu'")
+                conn.execute("UPDATE sessions SET user_id = 'pigouwu' WHERE user_id IS NULL OR TRIM(user_id) = ''")
 
     async def _run(self, fn, *args):
         async with self._lock:
@@ -201,17 +205,18 @@ class SQLiteSessionStore:
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
-    def _create_session_sync(self, title: str | None = None, session_id: str | None = None) -> dict[str, Any]:
+    def _create_session_sync(self, title: str | None = None, session_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
         now = time.time()
         resolved_id = session_id or f"unified_{int(now * 1000)}_{uuid.uuid4().hex[:8]}"
         resolved_title = (title or "New conversation").strip() or "New conversation"
+        owner_id = (user_id or "pigouwu").strip() or "pigouwu"
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO sessions (id, title, created_at, updated_at, compressed_summary, summary_up_to_msg_id)
-                VALUES (?, ?, ?, ?, '', 0)
+                INSERT INTO sessions (id, title, created_at, updated_at, compressed_summary, summary_up_to_msg_id, user_id)
+                VALUES (?, ?, ?, ?, '', 0, ?)
                 """,
-                (resolved_id, resolved_title[:100], now, now),
+                (resolved_id, resolved_title[:100], now, now, owner_id),
             )
             conn.commit()
         return {
@@ -222,12 +227,13 @@ class SQLiteSessionStore:
             "updated_at": now,
             "compressed_summary": "",
             "summary_up_to_msg_id": 0,
+            "user_id": owner_id,
         }
 
-    async def create_session(self, title: str | None = None, session_id: str | None = None) -> dict[str, Any]:
-        return await self._run(self._create_session_sync, title, session_id)
+    async def create_session(self, title: str | None = None, session_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
+        return await self._run(self._create_session_sync, title, session_id, user_id)
 
-    def _get_session_sync(self, session_id: str) -> dict[str, Any] | None:
+    def _get_session_sync(self, session_id: str, user_id: str | None = None, include_all: bool = False) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -239,6 +245,7 @@ class SQLiteSessionStore:
                     s.compressed_summary,
                     s.summary_up_to_msg_id,
                     s.preferences_json,
+                    COALESCE(s.user_id, 'pigouwu') AS user_id,
                     COALESCE(
                         (
                             SELECT t.status
@@ -272,8 +279,9 @@ class SQLiteSessionStore:
                 FROM sessions
                 s
                 WHERE s.id = ?
+                  AND (? OR COALESCE(NULLIF(TRIM(s.user_id), ''), 'pigouwu') = ?)
                 """,
-                (session_id,),
+                (session_id, 1 if include_all or user_id is None else 0, (user_id or 'pigouwu').strip() or 'pigouwu'),
             ).fetchone()
         if not row:
             return None
@@ -282,15 +290,15 @@ class SQLiteSessionStore:
         payload["preferences"] = _json_loads(payload.pop("preferences_json", ""), {})
         return payload
 
-    async def get_session(self, session_id: str) -> dict[str, Any] | None:
-        return await self._run(self._get_session_sync, session_id)
+    async def get_session(self, session_id: str, user_id: str | None = None, include_all: bool = False) -> dict[str, Any] | None:
+        return await self._run(self._get_session_sync, session_id, user_id, include_all)
 
-    async def ensure_session(self, session_id: str | None = None) -> dict[str, Any]:
+    async def ensure_session(self, session_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
         if session_id:
-            session = await self.get_session(session_id)
+            session = await self.get_session(session_id, user_id=user_id, include_all=False if user_id else True)
             if session is not None:
                 return session
-        return await self.create_session()
+        return await self.create_session(session_id=session_id, user_id=user_id)
 
     @staticmethod
     def _serialize_turn(row: sqlite3.Row) -> dict[str, Any]:
@@ -503,30 +511,44 @@ class SQLiteSessionStore:
     async def get_turn_events(self, turn_id: str, after_seq: int = 0) -> list[dict[str, Any]]:
         return await self._run(self._get_turn_events_sync, turn_id, after_seq)
 
-    def _update_session_title_sync(self, session_id: str, title: str) -> bool:
+    def _update_session_title_sync(self, session_id: str, title: str, user_id: str | None = None, include_all: bool = False) -> bool:
         with self._connect() as conn:
             cur = conn.execute(
                 """
                 UPDATE sessions
                 SET title = ?, updated_at = ?
                 WHERE id = ?
+                  AND (? OR COALESCE(NULLIF(TRIM(user_id), ''), 'pigouwu') = ?)
                 """,
-                ((title.strip() or "New conversation")[:100], time.time(), session_id),
+                (
+                    (title.strip() or "New conversation")[:100],
+                    time.time(),
+                    session_id,
+                    1 if include_all or user_id is None else 0,
+                    (user_id or "pigouwu").strip() or "pigouwu",
+                ),
             )
             conn.commit()
         return cur.rowcount > 0
 
-    async def update_session_title(self, session_id: str, title: str) -> bool:
-        return await self._run(self._update_session_title_sync, session_id, title)
+    async def update_session_title(self, session_id: str, title: str, user_id: str | None = None, include_all: bool = False) -> bool:
+        return await self._run(self._update_session_title_sync, session_id, title, user_id, include_all)
 
-    def _delete_session_sync(self, session_id: str) -> bool:
+    def _delete_session_sync(self, session_id: str, user_id: str | None = None, include_all: bool = False) -> bool:
         with self._connect() as conn:
-            cur = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            cur = conn.execute(
+                """
+                DELETE FROM sessions
+                WHERE id = ?
+                  AND (? OR COALESCE(NULLIF(TRIM(user_id), ''), 'pigouwu') = ?)
+                """,
+                (session_id, 1 if include_all or user_id is None else 0, (user_id or "pigouwu").strip() or "pigouwu"),
+            )
             conn.commit()
         return cur.rowcount > 0
 
-    async def delete_session(self, session_id: str) -> bool:
-        return await self._run(self._delete_session_sync, session_id)
+    async def delete_session(self, session_id: str, user_id: str | None = None, include_all: bool = False) -> bool:
+        return await self._run(self._delete_session_sync, session_id, user_id, include_all)
 
     def _add_message_sync(
         self,
@@ -689,7 +711,7 @@ class SQLiteSessionStore:
     async def get_messages_for_context(self, session_id: str) -> list[dict[str, Any]]:
         return await self._run(self._get_messages_for_context_sync, session_id)
 
-    def _list_sessions_sync(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    def _list_sessions_sync(self, limit: int = 50, offset: int = 0, user_id: str | None = None, include_all: bool = False) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
@@ -701,6 +723,7 @@ class SQLiteSessionStore:
                     s.compressed_summary,
                     s.summary_up_to_msg_id,
                     s.preferences_json,
+                    COALESCE(s.user_id, 'pigouwu') AS user_id,
                     COUNT(m.id) AS message_count,
                     COALESCE(
                         (
@@ -759,8 +782,8 @@ class SQLiteSessionStore:
             sessions.append(payload)
         return sessions
 
-    async def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
-        return await self._run(self._list_sessions_sync, limit, offset)
+    async def list_sessions(self, limit: int = 50, offset: int = 0, user_id: str | None = None, include_all: bool = False) -> list[dict[str, Any]]:
+        return await self._run(self._list_sessions_sync, limit, offset, user_id, include_all)
 
     def _update_summary_sync(self, session_id: str, summary: str, up_to_msg_id: int) -> bool:
         with self._connect() as conn:
@@ -804,8 +827,8 @@ class SQLiteSessionStore:
     async def update_session_preferences(self, session_id: str, preferences: dict[str, Any]) -> bool:
         return await self._run(self._update_session_preferences_sync, session_id, preferences)
 
-    async def get_session_with_messages(self, session_id: str) -> dict[str, Any] | None:
-        session = await self.get_session(session_id)
+    async def get_session_with_messages(self, session_id: str, user_id: str | None = None, include_all: bool = False) -> dict[str, Any] | None:
+        session = await self.get_session(session_id, user_id=user_id, include_all=include_all)
         if session is None:
             return None
         session["messages"] = await self.get_messages(session_id)

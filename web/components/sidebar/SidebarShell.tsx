@@ -9,6 +9,7 @@ import {
   BookOpen,
   Bot,
   Brain,
+  Shield,
   Library,
   MessageSquare,
   Network,
@@ -45,6 +46,7 @@ const PRIMARY_NAV: NavEntry[] = [
 ];
 
 const SECONDARY_NAV: NavEntry[] = [
+  { href: "/admin/users", label: "Admin", icon: Shield },
   { href: "/features", label: "Features", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

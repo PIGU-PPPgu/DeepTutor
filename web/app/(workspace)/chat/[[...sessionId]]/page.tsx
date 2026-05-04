@@ -631,7 +631,17 @@ export default function ChatPage() {
         extraAttachments = [...extraAttachments, { type: "pdf", filename: quizPdf.name, base64: b64 }];
       }
     }
-    if (isMathAnimatorMode) config = buildMathAnimatorWSConfig(mathAnimatorConfig);
+    if (isMathAnimatorMode) {
+      config = {
+        ...buildMathAnimatorWSConfig(mathAnimatorConfig),
+        output_mode: "image",
+        quality: "low",
+        style_hint: [
+          mathAnimatorConfig.style_hint,
+          "优先生成3-5张分镜图/静态步骤，不要渲染长视频；适合课堂几何证明演示，必须快速返回可见结果。若用户没有给出具体题目，只生成简短通用模板并提示补充题目条件。",
+        ].filter(Boolean).join("\n"),
+      };
+    }
     if (isVisualizeMode) config = buildVisualizeWSConfig(visualizeConfig);
     if (isResearchMode) config = buildResearchWSConfig(researchConfig);
 

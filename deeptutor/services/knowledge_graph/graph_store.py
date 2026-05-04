@@ -47,8 +47,13 @@ def delete_graph(kb_name: str, root: Path | None = None) -> bool:
     return False
 
 
+_HIDDEN_GRAPH_NAMES = {
+    "IntelliTutor-Seed-Knowledge",
+}
+
+
 def list_graphs(root: Path | None = None) -> list[str]:
     base = root or _DEFAULT_ROOT
     if not base.exists():
         return []
-    return [p.stem for p in base.glob("*.json")]
+    return sorted(p.stem for p in base.glob("*.json") if p.stem not in _HIDDEN_GRAPH_NAMES)

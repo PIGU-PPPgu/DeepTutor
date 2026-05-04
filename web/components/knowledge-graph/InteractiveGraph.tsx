@@ -54,6 +54,9 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
   const svgRef = useRef<SVGSVGElement>(null);
   const minimapSvgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const simNodesRef = useRef<SimNode[]>([]);
+  const centerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Auto-disable minimap & some effects for large graphs
@@ -104,11 +107,50 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
     img.src = url;
   }, [kbName]);
 
+  const centerNode = useCallback((nodeId: string, scale = 1.35, delay = 0) => {
+    if (centerTimerRef.current) clearTimeout(centerTimerRef.current);
+
+    const run = () => {
+      const svgEl = svgRef.current;
+      const zoom = zoomRef.current;
+      if (!svgEl || !zoom) return;
+
+      const target = simNodesRef.current.find((n) => n.id === nodeId);
+      if (!target || target.x == null || target.y == null) return;
+
+      const width = svgEl.clientWidth || 800;
+      const height = svgEl.clientHeight || 600;
+      const k = Math.max(0.8, Math.min(2.2, scale));
+
+      // Absolute transform: put graph-space (target.x,target.y) at viewport center.
+      // Do NOT compose with the current transform; composition is what causes the
+      // "node flies away" bug after repeated tree/node clicks.
+      const transform = d3.zoomIdentity
+        .translate(width / 2 - target.x * k, height / 2 - target.y * k)
+        .scale(k);
+
+      d3.select(svgEl)
+        .transition()
+        .duration(450)
+        .ease(d3.easeCubicOut)
+        .call(zoom.transform, transform);
+    };
+
+    if (delay > 0) centerTimerRef.current = setTimeout(run, delay);
+    else run();
+  }, []);
+
   const render = useCallback(() => {
     if (!svgRef.current || graph.nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
+    svg.attr("class", "bg-[var(--background)]");
     svg.selectAll("*").remove();
+
+    const textFill = getComputedStyle(document.documentElement).getPropertyValue("--foreground").trim() || "#0f172a";
+    const mutedFill = getComputedStyle(document.documentElement).getPropertyValue("--muted-foreground").trim() || "#64748b";
+    const panelFill = getComputedStyle(document.documentElement).getPropertyValue("--card").trim() || "#ffffff";
+    const borderFill = getComputedStyle(document.documentElement).getPropertyValue("--border").trim() || "#cbd5e1";
 
     const width = svgRef.current.clientWidth || 800;
     const height = svgRef.current.clientHeight || 600;
@@ -127,6 +169,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
         updateMinimap(event.transform);
       });
     svg.call(zoom);
+    zoomRef.current = zoom;
 
     // Disable default dblclick zoom so we can handle it ourselves
     svg.on("dblclick.zoom", null);
@@ -164,6 +207,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
         weight: e.weight,
         metadata: (e as any).metadata as Record<string, string> | undefined,
       }));
+    simNodesRef.current = nodes;
 
     const simulation = d3.forceSimulation<SimNode>(nodes)
       .force("link", d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(80))
@@ -183,8 +227,8 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
 
     // Edge hover tooltip (positioned relative to SVG element)
     const edgeTooltip = svg.append("g").style("display", "none").style("pointer-events", "none");
-    const edgeTooltipBg = edgeTooltip.append("rect").attr("rx", 4).attr("fill", "#0f172a").attr("stroke", "#475569").attr("stroke-width", 1).attr("opacity", 0.9);
-    const edgeTooltipText = edgeTooltip.append("text").attr("fill", "#94a3b8").attr("font-size", 11).attr("dy", "1em");
+    const edgeTooltipBg = edgeTooltip.append("rect").attr("rx", 4).attr("fill", panelFill).attr("stroke", borderFill).attr("stroke-width", 1).attr("opacity", 0.95);
+    const edgeTooltipText = edgeTooltip.append("text").attr("fill", mutedFill).attr("font-size", 11).attr("dy", "1em");
 
     link.on("mouseenter", function (event: MouseEvent, d) {
       if (!d.relation) return;
@@ -227,6 +271,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       .selectAll<SVGGElement, SimNode>("g")
       .data(nodes)
       .join("g")
+      .attr("class", "kg-node")
       .style("opacity", (d) => (highlightedNodeId && d.id !== highlightedNodeId ? 0.35 : 1))
       .call(
         d3.drag<SVGGElement, SimNode>()
@@ -291,9 +336,9 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
 
     // Hover tooltip: label + mastery %
     const tooltip = g.append("g").style("display", "none").style("pointer-events", "none");
-    const tooltipBg = tooltip.append("rect").attr("rx", 6).attr("fill", "#0f172a").attr("stroke", "#475569").attr("stroke-width", 1).attr("opacity", 0.95);
-    const tooltipLabel = tooltip.append("text").attr("fill", "#f1f5f9").attr("font-size", 12).attr("font-weight", "600");
-    const tooltipMastery = tooltip.append("text").attr("fill", "#64748b").attr("font-size", 11);
+    const tooltipBg = tooltip.append("rect").attr("rx", 6).attr("fill", panelFill).attr("stroke", borderFill).attr("stroke-width", 1).attr("opacity", 0.97);
+    const tooltipLabel = tooltip.append("text").attr("fill", textFill).attr("font-size", 12).attr("font-weight", "600");
+    const tooltipMastery = tooltip.append("text").attr("fill", mutedFill).attr("font-size", 11);
     const tooltipDot = tooltip.append("circle").attr("r", 4);
 
     node.on("mouseenter", function (_event, d) {
@@ -332,7 +377,11 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
         return nodeRadius(d.level, connCount.get(d.id)) + 14;
       })
       .attr("text-anchor", "middle")
-      .attr("fill", (d) => (d.id === highlightedNodeId ? "#ffffff" : "#f8fafc"))
+      .attr("fill", (d) => (d.id === highlightedNodeId ? textFill : textFill))
+      .attr("paint-order", "stroke")
+      .attr("stroke", panelFill)
+      .attr("stroke-width", 3)
+      .attr("stroke-linejoin", "round")
       .attr("font-weight", (d) => (d.id === highlightedNodeId ? 700 : 400))
       .attr("font-size", (d) => (d.level === 0 ? 12 : 10))
       .style("pointer-events", "none");
@@ -352,13 +401,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
           if (tgt === d.id) neighborIds.add(src);
         }
         if (d.x != null && d.y != null) {
-          svg.transition().duration(600).call(
-            zoom.transform,
-            d3.zoomIdentity
-              .translate(width / 2, height / 2)
-              .scale(Math.min(2.5, 4 / Math.sqrt(neighborIds.size)))
-              .translate(-(d.x || 0), -(d.y || 0))
-          );
+          centerNode(d.id, Math.min(2.2, 3.2 / Math.sqrt(neighborIds.size)));
         }
         return;
       }
@@ -372,11 +415,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
     if (highlightedNodeId) {
       const target = nodes.find((n) => n.id === highlightedNodeId);
       if (target?.x != null && target?.y != null) {
-        const transform = d3.zoomIdentity
-          .translate(width / 2, height / 2)
-          .scale(1.35)
-          .translate(-target.x, -target.y);
-        svg.transition().duration(500).call(zoom.transform, transform);
+        centerNode(target.id, 1.35, 250);
       }
     }
 
@@ -394,7 +433,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
       if (!mmEl || nodes.length === 0) return false;
       const mmSvg = d3.select(mmEl);
       mmSvg.selectAll("*").remove();
-      mmSvg.append("rect").attr("width", mmW).attr("height", mmH).attr("fill", "#0f172a").attr("rx", 6);
+      mmSvg.append("rect").attr("width", mmW).attr("height", mmH).attr("fill", panelFill).attr("stroke", borderFill).attr("rx", 6);
       // Persistent groups for edges/nodes/viewport
       mmSvg.append("g").attr("class", "mm-edges");
       mmSvg.append("g").attr("class", "mm-nodes");
@@ -456,7 +495,7 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
         .attr("cy", (d) => toY(d.y ?? 0))
         .attr("r", (d) => Math.max(1.5, nodeRadius(d.level, connCount.get(d.id)) * sc * 0.8))
         .attr("fill", (d) => nodeColor(d.mastery))
-        .attr("opacity", (d) => d.id === highlightedNodeId ? 1 : 0.7);
+        .attr("opacity", (d: SimNode) => d.id === highlightedNodeId ? 1 : 0.7);
 
       // Viewport rect
       const vp = mmSvg.select(".mm-viewport");
@@ -496,10 +535,11 @@ export function InteractiveGraph({ graph, kbName, highlightedNodeId = null, onNo
     });
 
     return () => {
+      if (centerTimerRef.current) clearTimeout(centerTimerRef.current);
       cancelAnimationFrame(mmRafId);
       simulation.stop();
     };
-  }, [graph, highlightedNodeId, onNodeClick]);
+  }, [graph, highlightedNodeId, onNodeClick, centerNode]);
 
   useEffect(() => {
     const cleanup = render();

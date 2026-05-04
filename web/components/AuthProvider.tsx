@@ -1,11 +1,13 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { authHeaders } from "@/lib/auth-client";
 
 interface User {
   id: number;
   username: string;
   display_name: string;
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -29,17 +31,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("intellitutor_token");
-    const savedUser = localStorage.getItem("intellitutor_user");
-    if (token && savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
+    const refreshUser = async () => {
+      const token = localStorage.getItem("intellitutor_token");
+      const savedUser = localStorage.getItem("intellitutor_user");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser));
+        } catch {
+          localStorage.removeItem("intellitutor_user");
+        }
+      }
+      const res = await fetch("/api/auth/me", { headers: authHeaders() });
+      if (!res.ok) {
         localStorage.removeItem("intellitutor_token");
         localStorage.removeItem("intellitutor_user");
+        setUser(null);
+        setLoading(false);
+        return;
       }
-    }
-    setLoading(false);
+      const data = await res.json();
+      localStorage.setItem("intellitutor_user", JSON.stringify(data.user));
+      setUser(data.user);
+      setLoading(false);
+    };
+    refreshUser().catch(() => setLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {

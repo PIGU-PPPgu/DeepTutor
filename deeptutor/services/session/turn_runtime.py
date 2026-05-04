@@ -309,7 +309,7 @@ class TurnRuntimeManager:
             "capability": capability,
             "config": {**validated_public_config, **runtime_only_config},
         }
-        session = await self.store.ensure_session(payload.get("session_id"))
+        session = await self.store.ensure_session(payload.get("session_id"), user_id=str(payload.get("user_id") or "").strip() or None)
         await self.store.update_session_preferences(
             session["id"],
             {
@@ -748,14 +748,30 @@ class TurnRuntimeManager:
             )
 
             orch = ChatOrchestrator()
+            turn_error: str | None = None
             async for event in orch.handle(context):
                 if event.type == StreamEventType.SESSION:
                     continue
                 payload_event = await self._persist_and_publish(execution, event)
                 if payload_event.get("type") not in {"done", "session"}:
                     assistant_events.append(payload_event)
+                if event.type == StreamEventType.ERROR:
+                    turn_error = str(event.content or "Turn failed")
+                    if not assistant_content.strip():
+                        assistant_content = turn_error
                 if _should_capture_assistant_content(event):
                     assistant_content += event.content
+
+            if turn_error:
+                await self.store.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=assistant_content,
+                    capability=capability_name,
+                    events=assistant_events,
+                )
+                await self.store.update_turn_status(turn_id, "failed", turn_error)
+                return
 
             # Update knowledge graph mastery from chat turn (non-critical)
             try:

@@ -96,6 +96,25 @@ async def unified_websocket(ws: WebSocket) -> None:
             if msg_type in {"message", "start_turn"}:
                 from deeptutor.services.session import get_turn_runtime_manager
 
+                user = msg.get("user") if isinstance(msg.get("user"), dict) else {}
+                username = str(user.get("username") or user.get("sub") or "").strip()
+                if not username:
+                    await safe_send(
+                        {
+                            "type": "error",
+                            "source": "unified_ws",
+                            "stage": "auth",
+                            "content": "请先登录后再开始对话。",
+                            "metadata": {"turn_terminal": True, "status": "rejected"},
+                            "session_id": str(msg.get("session_id") or ""),
+                            "turn_id": "",
+                            "seq": 0,
+                        }
+                    )
+                    continue
+                msg["user_id"] = username
+                msg["is_admin"] = bool(user.get("is_admin"))
+
                 runtime = get_turn_runtime_manager()
                 try:
                     _, turn = await runtime.start_turn(msg)

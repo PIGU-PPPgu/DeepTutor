@@ -11,6 +11,7 @@
  */
 
 import { wsUrl } from "./api";
+import { currentAuthUser } from "./auth-client";
 
 // ---- StreamEvent types (mirror Python StreamEventType) ----
 
@@ -65,6 +66,12 @@ export interface StartTurnMessage {
   }[];
   history_references?: string[];
   question_notebook_references?: number[];
+  user?: {
+    id?: number;
+    username?: string;
+    display_name?: string;
+    is_admin?: boolean;
+  } | null;
   skills?: string[];
 }
 
@@ -151,6 +158,7 @@ export class UnifiedWSClient {
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
     this.intentionalClose = false;
 
+    const user = currentAuthUser();
     const url = wsUrl("/api/v1/ws");
     this.ws = new WebSocket(url);
 
@@ -198,7 +206,10 @@ export class UnifiedWSClient {
       console.error("WebSocket not connected");
       return;
     }
-    this.ws.send(JSON.stringify(msg));
+    const enriched = (msg.type === "message" || msg.type === "start_turn")
+      ? { ...msg, user: msg.user ?? currentAuthUser() }
+      : msg;
+    this.ws.send(JSON.stringify(enriched));
   }
 
   disconnect(): void {
