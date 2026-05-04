@@ -308,7 +308,6 @@ export function SidebarShell({
         </div>
         <div className="mt-0.5 flex items-center gap-0.5">
           <a
-          <a
             href={GITHUB_REPO_URL}
             target="_blank"
             rel="noreferrer noopener"
