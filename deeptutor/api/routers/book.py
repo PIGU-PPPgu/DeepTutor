@@ -12,7 +12,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from deeptutor.book import (
@@ -24,6 +24,7 @@ from deeptutor.book import (
 from deeptutor.book.models import ContentType
 from deeptutor.book.streaming import SOURCE as BOOK_SOURCE
 from deeptutor.core.stream import StreamEventType
+from deeptutor.api.auth_deps import get_optional_user
 from deeptutor.core.stream_bus import StreamBus
 
 router = APIRouter()

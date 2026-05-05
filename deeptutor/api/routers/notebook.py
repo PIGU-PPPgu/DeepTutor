@@ -6,13 +6,21 @@ Provides notebook creation, querying, updating, deletion, and record management 
 import json
 from typing import AsyncGenerator, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from deeptutor.agents.notebook import NotebookSummarizeAgent
 from deeptutor.services.llm import clean_thinking_tags
-from deeptutor.services.notebook import notebook_manager
+from deeptutor.api.user_services import get_notebook_manager_for_user
+from deeptutor.services.notebook import NotebookManager
+
+import functools
+
+
+def _nm(request: Request) -> NotebookManager:
+    user_id = getattr(request.state, "user_id", None) if hasattr(request, "state") else None
+    return get_notebook_manager_for_user(user_id)
 
 router = APIRouter()
 
@@ -114,7 +122,7 @@ async def _stream_add_record_with_summary(
                 yield f"data: {json.dumps({'type': 'summary_chunk', 'content': summary}, ensure_ascii=False)}\n\n"
 
         summary = clean_thinking_tags("".join(summary_parts)).strip()
-        result = notebook_manager.add_record(
+        result = _nm(request).add_record(
             notebook_ids=request.notebook_ids,
             record_type=request.record_type,
             title=request.title,
@@ -138,7 +146,7 @@ async def _stream_add_record_with_summary(
 
 
 @router.get("/list")
-async def list_notebooks():
+async def list_notebooks(request: Request):
     """
     Get all notebook list
 
@@ -146,14 +154,14 @@ async def list_notebooks():
         Notebook list (includes summary information)
     """
     try:
-        notebooks = notebook_manager.list_notebooks()
+        notebooks = _nm(request).list_notebooks()
         return {"notebooks": notebooks, "total": len(notebooks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/statistics")
-async def get_statistics():
+async def get_statistics(request: Request):
     """
     Get notebook statistics
 
@@ -161,7 +169,7 @@ async def get_statistics():
         Statistics information
     """
     try:
-        stats = notebook_manager.get_statistics()
+        stats = _nm(request).get_statistics()
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -179,7 +187,7 @@ async def create_notebook(request: CreateNotebookRequest):
         Created notebook information
     """
     try:
-        notebook = notebook_manager.create_notebook(
+        notebook = _nm(request).create_notebook(
             name=request.name,
             description=request.description,
             color=request.color,
@@ -191,7 +199,7 @@ async def create_notebook(request: CreateNotebookRequest):
 
 
 @router.get("/{notebook_id}")
-async def get_notebook(notebook_id: str):
+async def get_notebook(request: Request, notebook_id: str):
     """
     Get notebook details
 
@@ -202,7 +210,7 @@ async def get_notebook(notebook_id: str):
         Notebook details (includes all records)
     """
     try:
-        notebook = notebook_manager.get_notebook(notebook_id)
+        notebook = _nm(request).get_notebook(notebook_id)
         if not notebook:
             raise HTTPException(status_code=404, detail="Notebook not found")
         return notebook
@@ -225,7 +233,7 @@ async def update_notebook(notebook_id: str, request: UpdateNotebookRequest):
         Updated notebook information
     """
     try:
-        notebook = notebook_manager.update_notebook(
+        notebook = _nm(request).update_notebook(
             notebook_id=notebook_id,
             name=request.name,
             description=request.description,
@@ -242,7 +250,7 @@ async def update_notebook(notebook_id: str, request: UpdateNotebookRequest):
 
 
 @router.delete("/{notebook_id}")
-async def delete_notebook(notebook_id: str):
+async def delete_notebook(request: Request, notebook_id: str):
     """
     Delete notebook
 
@@ -253,7 +261,7 @@ async def delete_notebook(notebook_id: str):
         Deletion result
     """
     try:
-        success = notebook_manager.delete_notebook(notebook_id)
+        success = _nm(request).delete_notebook(notebook_id)
         if not success:
             raise HTTPException(status_code=404, detail="Notebook not found")
         return {"success": True, "message": "Notebook deleted successfully"}
@@ -276,7 +284,7 @@ async def add_record(request: AddRecordRequest):
     """
     try:
         summary = await _build_record_summary(request)
-        result = notebook_manager.add_record(
+        result = _nm(request).add_record(
             notebook_ids=request.notebook_ids,
             record_type=request.record_type,
             title=request.title,
@@ -307,7 +315,7 @@ async def add_record_with_summary(request: AddRecordRequest):
 
 
 @router.delete("/{notebook_id}/records/{record_id}")
-async def remove_record(notebook_id: str, record_id: str):
+async def remove_record(request: Request, notebook_id: str, record_id: str):
     """
     Remove record from notebook
 
@@ -319,7 +327,7 @@ async def remove_record(notebook_id: str, record_id: str):
         Deletion result
     """
     try:
-        success = notebook_manager.remove_record(notebook_id, record_id)
+        success = _nm(request).remove_record(notebook_id, record_id)
         if not success:
             raise HTTPException(status_code=404, detail="Record not found")
         return {"success": True, "message": "Record removed successfully"}
@@ -333,7 +341,7 @@ async def remove_record(notebook_id: str, record_id: str):
 async def update_record(notebook_id: str, record_id: str, request: UpdateRecordRequest):
     """Update an existing notebook record in place."""
     try:
-        updated = notebook_manager.update_record(
+        updated = _nm(request).update_record(
             notebook_id=notebook_id,
             record_id=record_id,
             title=request.title,
@@ -353,6 +361,6 @@ async def update_record(notebook_id: str, record_id: str, request: UpdateRecordR
 
 
 @router.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check"""
     return {"status": "healthy", "service": "notebook"}
