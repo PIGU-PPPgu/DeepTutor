@@ -532,8 +532,6 @@ class OpenAICompatProvider(LLMProvider):
                     finish_reason = ch.finish_reason
             if not content and m.content:
                 content = m.content
-            if not content and getattr(m, "reasoning_content", None):
-                content = m.reasoning_content
             if not content and getattr(m, "reasoning", None):
                 content = m.reasoning
 
@@ -621,8 +619,11 @@ class OpenAICompatProvider(LLMProvider):
             for tc in (delta.tool_calls or []) if delta else []:
                 _accum_tc(tc, getattr(tc, "index", 0))
 
+        content = "".join(content_parts) or None
+        reasoning_content = "".join(reasoning_parts) or None
+
         return LLMResponse(
-            content="".join(content_parts) or None,
+            content=content,
             tool_calls=[
                 ToolCallRequest(
                     id=b["id"] or _short_tool_id(),
@@ -633,7 +634,7 @@ class OpenAICompatProvider(LLMProvider):
             ],
             finish_reason=finish_reason,
             usage=usage,
-            reasoning_content="".join(reasoning_parts) or None,
+            reasoning_content=reasoning_content,
         )
 
     @staticmethod
