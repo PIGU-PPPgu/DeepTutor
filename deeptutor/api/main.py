@@ -165,6 +165,10 @@ async def selective_access_log(request, call_next):
     return response
 
 
+from deeptutor.api.auth_middleware import AuthMiddleware
+
+app.add_middleware(AuthMiddleware)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,

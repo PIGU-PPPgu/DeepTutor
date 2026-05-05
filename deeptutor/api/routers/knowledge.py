@@ -18,6 +18,7 @@ from uuid import uuid4
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Depends,
     File,
     Form,
     HTTPException,
@@ -28,6 +29,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from deeptutor.api.auth_deps import get_optional_user
 from deeptutor.api.utils.progress_broadcaster import ProgressBroadcaster
 from deeptutor.api.utils.task_id_manager import TaskIDManager
 from deeptutor.api.utils.task_log_stream import capture_task_logs, get_task_stream_manager
@@ -71,12 +73,25 @@ DEFAULT_KB_ALIASES = {"", "default", "current", "selected", "默认", "默认知
 kb_manager = None
 
 
-def get_kb_manager():
-    """Get KnowledgeBaseManager instance (lazy init)"""
+def _get_kb_base_dir(user: dict | None) -> Path:
+    """Return user-scoped KB base dir when authenticated, else shared dir."""
+    if user:
+        user_id = str(user.get("uid") or user.get("sub") or "")
+        if user_id:
+            return PROJECT_ROOT / "data" / "knowledge_bases" / user_id
+    return _kb_base_dir
+
+
+def get_kb_manager(user: dict | None = None):
+    """Get KnowledgeBaseManager instance for the given user (lazy init)"""
     global kb_manager
-    if kb_manager is None:
-        kb_manager = KnowledgeBaseManager(base_dir=str(_kb_base_dir))
-    return kb_manager
+    base_dir = _get_kb_base_dir(user)
+    if user is None and kb_manager is not None:
+        return kb_manager
+    manager = KnowledgeBaseManager(base_dir=str(base_dir))
+    if user is None:
+        kb_manager = manager
+    return manager
 
 
 class KnowledgeBaseInfo(BaseModel):
@@ -524,10 +539,10 @@ async def run_upload_processing_task(
 
 
 @router.get("/health")
-async def health_check():
+async def health_check(user: dict | None = Depends(get_optional_user)):
     """Health check endpoint"""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         config_exists = manager.config_file.exists()
         kb_count = len(manager.list_knowledge_bases())
         return {
@@ -628,10 +643,10 @@ async def sync_configs_from_metadata():
 
 
 @router.get("/default")
-async def get_default_kb():
+async def get_default_kb(user: dict | None = Depends(get_optional_user)):
     """Get the default knowledge base."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         default_kb = manager.get_default()
         return {"default_kb": default_kb}
     except Exception as e:
@@ -640,10 +655,10 @@ async def get_default_kb():
 
 
 @router.put("/default/{kb_name}")
-async def set_default_kb(kb_name: str):
+async def set_default_kb(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Set the default knowledge base."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
 
         # Verify KB exists
         if kb_name not in manager.list_knowledge_bases():
@@ -659,10 +674,10 @@ async def set_default_kb(kb_name: str):
 
 
 @router.get("/list", response_model=list[KnowledgeBaseInfo])
-async def list_knowledge_bases():
+async def list_knowledge_bases(user: dict | None = Depends(get_optional_user)):
     """List all available knowledge bases with their details."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         kb_names = manager.list_knowledge_bases()
 
         logger.debug(f"Found {len(kb_names)} knowledge bases: {kb_names}")
@@ -737,10 +752,10 @@ async def list_knowledge_bases():
 
 
 @router.get("/{kb_name}")
-async def get_knowledge_base_details(kb_name: str):
+async def get_knowledge_base_details(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Get detailed info for a specific KB."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         return manager.get_info(kb_name)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
@@ -748,18 +763,18 @@ async def get_knowledge_base_details(kb_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _resolve_kb_raw_dir(kb_name: str) -> Path:
+def _resolve_kb_raw_dir(kb_name: str, user: dict | None = None) -> Path:
     """Resolve the raw/ directory for a KB, validating that it exists."""
-    manager = get_kb_manager()
+    manager = get_kb_manager(user)
     resolved_name = _resolve_registered_kb_name(manager, kb_name)
     kb_path = manager.get_knowledge_base_path(resolved_name)
     return kb_path / "raw"
 
 
 @router.get("/{kb_name}/files")
-async def list_kb_raw_files(kb_name: str):
+async def list_kb_raw_files(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """List raw documents stored under data/knowledge_bases/<kb>/raw/."""
-    raw_dir = _resolve_kb_raw_dir(kb_name)
+    raw_dir = _resolve_kb_raw_dir(kb_name, user)
     if not raw_dir.exists() or not raw_dir.is_dir():
         return {"files": []}
 
@@ -784,13 +799,15 @@ async def list_kb_raw_files(kb_name: str):
 
 
 @router.get("/{kb_name}/files/{filename:path}")
-async def serve_kb_raw_file(kb_name: str, filename: str):
+async def serve_kb_raw_file(
+    kb_name: str, filename: str, user: dict | None = Depends(get_optional_user)
+):
     """Serve a single raw document for inline preview / download.
 
     Resolution is sandboxed to the KB's raw/ directory; any path that
     escapes via traversal yields 403.
     """
-    raw_dir = _resolve_kb_raw_dir(kb_name)
+    raw_dir = _resolve_kb_raw_dir(kb_name, user)
     if not raw_dir.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -814,10 +831,10 @@ async def serve_kb_raw_file(kb_name: str, filename: str):
 
 
 @router.delete("/{kb_name}")
-async def delete_knowledge_base(kb_name: str):
+async def delete_knowledge_base(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Delete a knowledge base."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         success = manager.delete_knowledge_base(kb_name, confirm=True)
         if not success:
             raise HTTPException(status_code=400, detail="Failed to delete knowledge base")
@@ -847,10 +864,12 @@ async def upload_files(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     rag_provider: str = Form(None),
+    user: dict | None = Depends(get_optional_user),
 ):
     """Upload files to a knowledge base and process them in background."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
+        kb_base = _get_kb_base_dir(user)
         kb_path = manager.get_knowledge_base_path(kb_name)
         raw_dir = kb_path / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -885,7 +904,7 @@ async def upload_files(
         background_tasks.add_task(
             run_upload_processing_task,
             kb_name=kb_name,
-            base_dir=str(_kb_base_dir),
+            base_dir=str(kb_base),
             uploaded_file_paths=uploaded_file_paths,
             task_id=task_id,
             rag_provider=kb_provider,
@@ -912,15 +931,17 @@ async def create_knowledge_base(
     name: str = Form(...),
     files: list[UploadFile] = File(...),
     rag_provider: str = Form(DEFAULT_PROVIDER),
+    user: dict | None = Depends(get_optional_user),
 ):
     """Create a new knowledge base and initialize it with files."""
     try:
+        kb_base = _get_kb_base_dir(user)
         try:
             name = validate_knowledge_base_name(name)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         if name in manager.list_knowledge_bases():
             raise HTTPException(status_code=400, detail=f"Knowledge base '{name}' already exists")
 
@@ -953,11 +974,11 @@ async def create_knowledge_base(
             manager.config["knowledge_bases"][name]["needs_reindex"] = False
             manager._save_config()
 
-        progress_tracker = ProgressTracker(name, _kb_base_dir)
+        progress_tracker = ProgressTracker(name, kb_base)
 
         initializer = KnowledgeBaseInitializer(
             kb_name=name,
-            base_dir=str(_kb_base_dir),
+            base_dir=str(kb_base),
             progress_tracker=progress_tracker,
             rag_provider=rag_provider,
         )
@@ -965,7 +986,7 @@ async def create_knowledge_base(
         initializer.create_directory_structure()
         progress_tracker.task_id = task_id
 
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         if name not in manager.list_knowledge_bases():
             logger.warning(f"KB {name} not found in config, registering manually")
             initializer._register_to_config()
@@ -1140,6 +1161,7 @@ async def run_reindex_task(kb_name: str, base_dir: str, task_id: str, signature_
 async def reindex_knowledge_base(
     kb_name: str,
     background_tasks: BackgroundTasks,
+    user: dict | None = Depends(get_optional_user),
 ):
     """Re-index ``kb_name`` against the currently-active embedding model.
 
@@ -1148,7 +1170,8 @@ async def reindex_knowledge_base(
     manual re-index will converge them onto the flat layout.
     """
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
+        kb_base = _get_kb_base_dir(user)
         kb_name = _resolve_registered_kb_name(manager, kb_name)
         kb_entry = _load_kb_entry_or_404(manager, kb_name)
         force_reindex = str(kb_entry.get("status") or "").lower() == "error"
@@ -1168,7 +1191,7 @@ async def reindex_knowledge_base(
                 ),
             )
 
-        kb_dir = _kb_base_dir / kb_name
+        kb_dir = kb_base / kb_name
         matching_version = find_matching_version(kb_dir, signature)
         matching_valid = _matching_index_is_valid(kb_name, matching_version)
         if (
@@ -1205,7 +1228,7 @@ async def reindex_knowledge_base(
         background_tasks.add_task(
             run_reindex_task,
             kb_name=kb_name,
-            base_dir=str(_kb_base_dir),
+            base_dir=str(kb_base),
             task_id=task_id,
             signature_hash=signature.hash(),
         )
@@ -1224,10 +1247,11 @@ async def reindex_knowledge_base(
 
 
 @router.get("/{kb_name}/progress")
-async def get_progress(kb_name: str):
+async def get_progress(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Get initialization progress for a knowledge base"""
     try:
-        progress_tracker = ProgressTracker(kb_name, _kb_base_dir)
+        kb_base = _get_kb_base_dir(user)
+        progress_tracker = ProgressTracker(kb_name, kb_base)
         progress = progress_tracker.get_progress()
 
         if progress is None:
@@ -1239,10 +1263,11 @@ async def get_progress(kb_name: str):
 
 
 @router.post("/{kb_name}/progress/clear")
-async def clear_progress(kb_name: str):
+async def clear_progress(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Clear progress file for a knowledge base (useful for stuck states)"""
     try:
-        progress_tracker = ProgressTracker(kb_name, _kb_base_dir)
+        kb_base = _get_kb_base_dir(user)
+        progress_tracker = ProgressTracker(kb_name, kb_base)
         progress_tracker.clear()
         return {"status": "success", "message": f"Progress cleared for {kb_name}"}
     except Exception as e:
@@ -1254,16 +1279,24 @@ async def websocket_progress(websocket: WebSocket, kb_name: str):
     """WebSocket endpoint for real-time progress updates"""
     await websocket.accept()
 
+    # Resolve user from token query param (WebSocket can't use Depends)
+    from deeptutor.api.auth_deps import _decode_token
+    _ws_user = None
+    _ws_token = websocket.query_params.get("token")
+    if _ws_token:
+        _ws_user = _decode_token(_ws_token)
+    kb_base = _get_kb_base_dir(_ws_user)
+
     broadcaster = ProgressBroadcaster.get_instance()
 
     try:
         await broadcaster.connect(kb_name, websocket)
 
-        progress_tracker = ProgressTracker(kb_name, _kb_base_dir)
+        progress_tracker = ProgressTracker(kb_name, kb_base)
         initial_progress = progress_tracker.get_progress()
         expected_task_id = websocket.query_params.get("task_id")
 
-        kb_dir = _kb_base_dir / kb_name
+        kb_dir = kb_base / kb_name
         from deeptutor.services.rag.index_versioning import list_kb_versions
 
         kb_is_ready = any(bool(version.get("ready")) for version in list_kb_versions(kb_dir))
@@ -1382,7 +1415,11 @@ async def websocket_progress(websocket: WebSocket, kb_name: str):
 
 
 @router.post("/{kb_name}/link-folder", response_model=LinkedFolderInfo)
-async def link_folder(kb_name: str, request: LinkFolderRequest):
+async def link_folder(
+    kb_name: str,
+    request: LinkFolderRequest,
+    user: dict | None = Depends(get_optional_user),
+):
     """
     Link a local folder to a knowledge base.
 
@@ -1395,7 +1432,7 @@ async def link_folder(kb_name: str, request: LinkFolderRequest):
     - Relative paths (resolved from server working directory)
     """
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         folder_info = manager.link_folder(kb_name, request.folder_path)
         logger.info(f"Linked folder '{request.folder_path}' to KB '{kb_name}'")
         return LinkedFolderInfo(**folder_info)
@@ -1409,10 +1446,10 @@ async def link_folder(kb_name: str, request: LinkFolderRequest):
 
 
 @router.get("/{kb_name}/linked-folders", response_model=list[LinkedFolderInfo])
-async def get_linked_folders(kb_name: str):
+async def get_linked_folders(kb_name: str, user: dict | None = Depends(get_optional_user)):
     """Get list of linked folders for a knowledge base."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         folders = manager.get_linked_folders(kb_name)
         return [LinkedFolderInfo(**f) for f in folders]
     except ValueError:
@@ -1422,10 +1459,12 @@ async def get_linked_folders(kb_name: str):
 
 
 @router.delete("/{kb_name}/linked-folders/{folder_id}")
-async def unlink_folder(kb_name: str, folder_id: str):
+async def unlink_folder(
+    kb_name: str, folder_id: str, user: dict | None = Depends(get_optional_user)
+):
     """Unlink a folder from a knowledge base."""
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
         success = manager.unlink_folder(kb_name, folder_id)
         if not success:
             raise HTTPException(status_code=404, detail=f"Folder '{folder_id}' not found")
@@ -1438,7 +1477,12 @@ async def unlink_folder(kb_name: str, folder_id: str):
 
 
 @router.post("/{kb_name}/sync-folder/{folder_id}")
-async def sync_folder(kb_name: str, folder_id: str, background_tasks: BackgroundTasks):
+async def sync_folder(
+    kb_name: str,
+    folder_id: str,
+    background_tasks: BackgroundTasks,
+    user: dict | None = Depends(get_optional_user),
+):
     """
     Sync files from a linked folder to the knowledge base.
 
@@ -1446,7 +1490,8 @@ async def sync_folder(kb_name: str, folder_id: str, background_tasks: Background
     any new files that haven't been added yet.
     """
     try:
-        manager = get_kb_manager()
+        manager = get_kb_manager(user)
+        kb_base = _get_kb_base_dir(user)
         kb_entry = _load_kb_entry_or_404(manager, kb_name)
         _assert_kb_writable_or_409(kb_name, kb_entry)
         kb_provider = _validate_registered_provider(
@@ -1483,7 +1528,7 @@ async def sync_folder(kb_name: str, folder_id: str, background_tasks: Background
         background_tasks.add_task(
             run_upload_processing_task,
             kb_name=kb_name,
-            base_dir=str(_kb_base_dir),
+            base_dir=str(kb_base),
             uploaded_file_paths=files_to_process,
             task_id=task_id,
             rag_provider=kb_provider,

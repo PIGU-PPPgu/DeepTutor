@@ -12,10 +12,11 @@ import json
 import time
 from typing import Any, List, Literal, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from deeptutor.api.auth_deps import get_optional_user
 from deeptutor.services.config import get_config_test_runner, get_model_catalog_service
 from deeptutor.services.embedding.client import reset_embedding_client
 from deeptutor.services.llm.client import reset_llm_client
@@ -26,7 +27,19 @@ from deeptutor.services.path_service import get_path_service
 router = APIRouter()
 
 _path_service = get_path_service()
-SETTINGS_FILE = _path_service.get_settings_file("interface")
+# Fallback settings file (used when no user is authenticated)
+_DEFAULT_SETTINGS_FILE = _path_service.get_settings_file("interface")
+
+
+def _get_settings_file(user: dict | None):
+    """Return per-user settings file path when authenticated, else shared path."""
+    if user:
+        user_id = str(user.get("uid") or user.get("sub") or "")
+        if user_id:
+            user_settings_dir = _path_service.get_settings_dir() / user_id
+            user_settings_dir.mkdir(parents=True, exist_ok=True)
+            return user_settings_dir / "interface.json"
+    return _DEFAULT_SETTINGS_FILE
 
 DEFAULT_SIDEBAR_NAV_ORDER = {
     "start": ["/", "/history", "/knowledge", "/notebook"],
@@ -80,10 +93,12 @@ def _invalidate_runtime_caches() -> None:
     reset_embedding_client()
 
 
-def load_ui_settings() -> dict[str, Any]:
-    if SETTINGS_FILE.exists():
+def load_ui_settings(settings_file=None) -> dict[str, Any]:
+    if settings_file is None:
+        settings_file = _DEFAULT_SETTINGS_FILE
+    if settings_file.exists():
         try:
-            with open(SETTINGS_FILE, encoding="utf-8") as handle:
+            with open(settings_file, encoding="utf-8") as handle:
                 saved = json.load(handle)
                 return {**DEFAULT_UI_SETTINGS, **saved}
         except Exception:
@@ -91,9 +106,11 @@ def load_ui_settings() -> dict[str, Any]:
     return DEFAULT_UI_SETTINGS.copy()
 
 
-def save_ui_settings(settings: dict[str, Any]) -> None:
-    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
+def save_ui_settings(settings: dict[str, Any], settings_file=None) -> None:
+    if settings_file is None:
+        settings_file = _DEFAULT_SETTINGS_FILE
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_file, "w", encoding="utf-8") as handle:
         json.dump(settings, handle, ensure_ascii=False, indent=2)
 
 
@@ -144,9 +161,9 @@ def _provider_choices() -> dict[str, list[dict[str, str]]]:
 
 
 @router.get("")
-async def get_settings():
+async def get_settings(user: dict | None = Depends(get_optional_user)):
     return {
-        "ui": load_ui_settings(),
+        "ui": load_ui_settings(_get_settings_file(user)),
         "catalog": get_model_catalog_service().load(),
         "providers": _provider_choices(),
     }
@@ -182,32 +199,35 @@ async def apply_catalog(payload: CatalogPayload | None = None):
 
 
 @router.put("/theme")
-async def update_theme(update: ThemeUpdate):
-    current_ui = load_ui_settings()
+async def update_theme(update: ThemeUpdate, user: dict | None = Depends(get_optional_user)):
+    sf = _get_settings_file(user)
+    current_ui = load_ui_settings(sf)
     current_ui["theme"] = update.theme
-    save_ui_settings(current_ui)
+    save_ui_settings(current_ui, sf)
     return {"theme": update.theme}
 
 
 @router.put("/language")
-async def update_language(update: LanguageUpdate):
-    current_ui = load_ui_settings()
+async def update_language(update: LanguageUpdate, user: dict | None = Depends(get_optional_user)):
+    sf = _get_settings_file(user)
+    current_ui = load_ui_settings(sf)
     current_ui["language"] = update.language
-    save_ui_settings(current_ui)
+    save_ui_settings(current_ui, sf)
     return {"language": update.language}
 
 
 @router.put("/ui")
-async def update_ui_settings(update: UISettings):
-    current_ui = load_ui_settings()
+async def update_ui_settings(update: UISettings, user: dict | None = Depends(get_optional_user)):
+    sf = _get_settings_file(user)
+    current_ui = load_ui_settings(sf)
     current_ui.update(update.model_dump(exclude_none=True))
-    save_ui_settings(current_ui)
+    save_ui_settings(current_ui, sf)
     return current_ui
 
 
 @router.post("/reset")
-async def reset_settings():
-    save_ui_settings(DEFAULT_UI_SETTINGS)
+async def reset_settings(user: dict | None = Depends(get_optional_user)):
+    save_ui_settings(DEFAULT_UI_SETTINGS, _get_settings_file(user))
     return DEFAULT_UI_SETTINGS
 
 
@@ -224,8 +244,8 @@ async def get_themes():
 
 
 @router.get("/sidebar")
-async def get_sidebar_settings():
-    current_ui = load_ui_settings()
+async def get_sidebar_settings(user: dict | None = Depends(get_optional_user)):
+    current_ui = load_ui_settings(_get_settings_file(user))
     return {
         "description": current_ui.get(
             "sidebar_description", DEFAULT_UI_SETTINGS["sidebar_description"]
@@ -235,18 +255,24 @@ async def get_sidebar_settings():
 
 
 @router.put("/sidebar/description")
-async def update_sidebar_description(update: SidebarDescriptionUpdate):
-    current_ui = load_ui_settings()
+async def update_sidebar_description(
+    update: SidebarDescriptionUpdate, user: dict | None = Depends(get_optional_user)
+):
+    sf = _get_settings_file(user)
+    current_ui = load_ui_settings(sf)
     current_ui["sidebar_description"] = update.description
-    save_ui_settings(current_ui)
+    save_ui_settings(current_ui, sf)
     return {"description": update.description}
 
 
 @router.put("/sidebar/nav-order")
-async def update_sidebar_nav_order(update: SidebarNavOrderUpdate):
-    current_ui = load_ui_settings()
+async def update_sidebar_nav_order(
+    update: SidebarNavOrderUpdate, user: dict | None = Depends(get_optional_user)
+):
+    sf = _get_settings_file(user)
+    current_ui = load_ui_settings(sf)
     current_ui["sidebar_nav_order"] = update.nav_order.model_dump()
-    save_ui_settings(current_ui)
+    save_ui_settings(current_ui, sf)
     return {"nav_order": update.nav_order.model_dump()}
 
 
