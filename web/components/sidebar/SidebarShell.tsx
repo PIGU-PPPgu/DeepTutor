@@ -195,7 +195,7 @@ export function SidebarShell({
           >
             <Github size={15} strokeWidth={1.6} />
           </a>
-          <UserMenu />
+          <UserMenu collapsed />
           <VersionBadge collapsed />
         </div>
       </aside>
@@ -307,23 +307,11 @@ export function SidebarShell({
           );
         })}
         {footerSlot}
-        <div className="flex items-center justify-between px-1 py-1">
-          <div className="flex items-center gap-0.5">
+        <div className="mt-auto border-t border-[var(--border)]/40 px-2 py-2">
+          <div className="flex items-center justify-between">
             <VersionBadge />
+            <UserMenu />
           </div>
-          <UserMenu />
-        </div>
-        <div className="mt-0.5 flex items-center gap-0.5">
-          <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            title="GitHub"
-            aria-label="GitHub"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)]/55 transition-colors hover:bg-[var(--background)]/50 hover:text-[var(--muted-foreground)]"
-          >
-            <Github size={13} strokeWidth={1.7} />
-          </a>
         </div>
       </div>
     </aside>
