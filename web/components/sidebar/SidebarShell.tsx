@@ -8,15 +8,19 @@ import { useAppShell } from "@/context/AppShellContext";
 import {
   BookOpen,
   Bot,
+  Brain,
   Github,
   LayoutGrid,
   Library,
   MessageSquare,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
   Plus,
   Settings,
+  Shield,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -40,10 +44,13 @@ const PRIMARY_NAV: NavEntry[] = [
   { href: "/book", label: "Book", icon: Library },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/space", label: "Space", icon: LayoutGrid },
+  { href: "/graph", label: "Knowledge Graph", icon: Network },
 ];
 
 const SECONDARY_NAV: NavEntry[] = [
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/admin/users", label: "Admin", icon: Shield },
+  { href: "/features", label: "Features", icon: Sparkles },
 ];
 const DEFAULT_SESSION_VIEWPORT_CLASS_NAME = "max-h-[112px]";
 const GITHUB_REPO_URL = "https://github.com/HKUDS/DeepTutor";
@@ -99,7 +106,7 @@ export function SidebarShell({
             className="flex items-center justify-center transition-opacity duration-150 group-hover/sb:opacity-0"
           >
             <Image
-              src="/logo-ver2.png"
+              src="/intellitutor-mark.svg"
               alt="IntelliTutor"
               width={22}
               height={22}
@@ -202,11 +209,11 @@ export function SidebarShell({
       <div className="flex h-14 items-center justify-between px-4">
         <Link href="/" className="group flex items-center gap-2">
           <Image
-            src="/logo-ver2.png"
+            src="/intellitutor-mark.svg"
             alt="IntelliTutor"
-            width={22}
-            height={22}
-            className="h-[22px] w-[22px] transition-transform duration-200 group-hover:scale-105"
+            width={28}
+            height={28}
+            className="rounded-lg"
           />
           <span className="text-[16px] font-semibold leading-none tracking-[-0.02em] text-[var(--foreground)]">
             IntelliTutor

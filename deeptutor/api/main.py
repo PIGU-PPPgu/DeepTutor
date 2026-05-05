@@ -219,7 +219,7 @@ from deeptutor.api.routers import (
     unified_ws,
     vision_solver,
 )
-from deeptutor.api.routers import auth, kg_graph
+from deeptutor.api.routers import assessment, audio, auth, git_sync, kg_graph, learning_plan, parent_report
 
 # Include routers
 app.include_router(solve.router, prefix="/api/v1", tags=["solve"])
@@ -250,6 +250,11 @@ app.include_router(unified_ws.router, prefix="/api/v1", tags=["unified-ws"])
 # IntelliTutor custom routers
 app.include_router(auth.router, tags=["auth"])
 app.include_router(kg_graph.router, prefix="/api/v1", tags=["knowledge-graph"])
+app.include_router(assessment.router, tags=["assessment"])
+app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
+app.include_router(git_sync.router)
+app.include_router(learning_plan.router, prefix="/api/v1", tags=["learning-plan"])
+app.include_router(parent_report.router, prefix="/api/v1", tags=["parent-report"])
 
 
 @app.get("/")
