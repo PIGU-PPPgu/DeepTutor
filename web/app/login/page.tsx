@@ -31,7 +31,10 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "操作失败");
-      if (data.token) localStorage.setItem("auth_token", data.token);
+      if (data.token) {
+        localStorage.setItem("intellitutor_token", data.token);
+        localStorage.setItem("intellitutor_user", JSON.stringify(data.user || {}));
+      }
       router.push("/");
     } catch (err: any) {
       setError(err.message);

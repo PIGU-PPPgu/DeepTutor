@@ -5,6 +5,24 @@
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE || "";
 
+// Auto-inject auth headers into all API fetch calls
+if (typeof window !== "undefined") {
+  const origFetch = window.fetch;
+  window.fetch = function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+    // Only inject auth for API calls
+    if (url.startsWith("/api") || url.includes("/api/")) {
+      const headers = new Headers(init?.headers);
+      const token = localStorage.getItem("intellitutor_token");
+      if (token && !headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+      init = { ...init, headers };
+    }
+    return origFetch.call(this, input, init);
+  };
+}
+
 // Hostnames that always refer to the local machine. When the build-time base
 // URL points to one of these, but the page is opened from a non-local origin,
 // we rewrite the hostname so requests reach the actual server.
