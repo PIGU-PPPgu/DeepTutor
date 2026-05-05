@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/AuthProvider";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -12,7 +13,6 @@ export default function LoginPage() {
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const { login, register } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,11 +20,18 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      if (mode === "login") {
-        await login(username, password);
-      } else {
-        await register(username, password, displayName || username, inviteCode);
-      }
+      const url = mode === "login" ? `${API_BASE}/api/auth/login` : `${API_BASE}/api/auth/register`;
+      const body = mode === "login"
+        ? { username, password }
+        : { username, password, display_name: displayName || username, invite_code: inviteCode };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "操作失败");
+      if (data.token) localStorage.setItem("auth_token", data.token);
       router.push("/");
     } catch (err: any) {
       setError(err.message);
