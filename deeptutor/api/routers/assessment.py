@@ -12,9 +12,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from deeptutor.capabilities.assessment import AssessmentCapability
-from deeptutor.logging import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/assessment", tags=["assessment"])
 
 # 全局 capability 实例

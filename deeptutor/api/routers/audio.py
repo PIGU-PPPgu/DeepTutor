@@ -23,9 +23,9 @@ from deeptutor.capabilities.audio_companion import (
     list_podcast_tasks,
 )
 from deeptutor.knowledge.manager import KnowledgeBaseManager
-from deeptutor.logging import get_logger
+import logging
 
-logger = get_logger("audio_api")
+logger = logging.getLogger("audio_api")
 router = APIRouter()
 
 
