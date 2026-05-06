@@ -24,6 +24,11 @@ PUBLIC_PATHS = {
 PUBLIC_PREFIXES = (
     "/api/auth/",
     "/_next/",
+    "/favicon",
+    "/apple-touch",
+    "/icon-",
+    "/intellitutor-",
+    "/logo",
 )
 
 

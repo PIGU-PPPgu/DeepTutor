@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl nodejs && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pre-built backend
+COPY deeptutor/ /app/deeptutor/
+COPY setup.py pyproject.toml README.md /app/
+
+# Copy pre-built frontend
+COPY web/.next/ /app/web/.next/
+COPY web/public/ /app/web/public/
+COPY web/package.json /app/web/
+
+RUN pip install --no-cache-dir /app
+
+EXPOSE 8001 3782
+
+# Backend + frontend via supervisord
+RUN printf '[supervisord]\nnodaemon=true\n\n[program:backend]\ncommand=python -m uvicorn deeptutor.api.main:app --host 0.0.0.0 --port 8001\nautorestart=true\n\n[program:frontend]\ncommand=node /app/web/.next/standalone/server.js\nenvironment=PORT="3782",HOSTNAME="0.0.0.0"\nautorestart=true\n' > /etc/supervisor/conf.d/app.conf && \
+    apt-get update && apt-get install -y --no-install-recommends supervisor && rm -rf /var/lib/apt/lists/*
+
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

@@ -1,0 +1,23 @@
+FROM docker.1ms.run/python:3.12-slim
+
+# Install node 20.x + supervisor
+RUN apt-get update && apt-get install -y --no-install-recommends curl supervisor ca-certificates &&     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&     apt-get install -y nodejs &&     rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Backend
+COPY deeptutor/ deeptutor/
+COPY pyproject.toml README.md LICENSE ./
+RUN pip install --no-cache-dir -e .
+
+# Frontend (pre-built on server)
+COPY web/.next/ web/.next/
+COPY web/public/ web/public/
+COPY web/package.json web/
+
+# Supervisord config
+RUN printf '[supervisord]\nnodaemon=true\n\n[program:backend]\ncommand=python -m uvicorn deeptutor.api.main:app --host 0.0.0.0 --port 8001\ndirectory=/app\nautorestart=true\nstdout_logfile=/dev/fd/1\nstdout_logfile_maxbytes=0\nstderr_logfile=/dev/fd/2\nstderr_logfile_maxbytes=0\n\n[program:frontend]\ncommand=node /app/web/.next/standalone/server.js\ndirectory=/app/web\nenvironment=PORT="3782",HOSTNAME="0.0.0.0"\nautorestart=true\nstdout_logfile=/dev/fd/1\nstdout_logfile_maxbytes=0\nstderr_logfile=/dev/fd/2\nstderr_logfile_maxbytes=0\n' > /etc/supervisor/conf.d/app.conf
+
+EXPOSE 8001 3782
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

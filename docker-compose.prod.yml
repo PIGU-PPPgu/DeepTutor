@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+      - "3372:3782"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-Pro/zai-org/GLM-5}
+      - LLM_API_BASE=${LLM_API_BASE:-https://api.siliconflow.cn/v1}
+      - NEXT_PUBLIC_API_BASE_EXTERNAL=https://tutor.intelliclass.online
+      - BACKEND_PORT=8001
+      - FRONTEND_PORT=3782
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
